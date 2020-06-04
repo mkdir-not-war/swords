@@ -81,12 +81,28 @@ def use_element(player, e):
 	else:
 		return 'out of mana'
 
+TILE_WIDTH = 32
+
 class MapData:
 	def __init__(self, dim=(0, 0)):
 		self.width = dim[0]
 		self.height = dim[1]
 		self.geo = [] # start in top left
 		self.spawn = (0, 0)
+
+	def get_geo(self, x, y):
+		result = self.geo[x + self.width * y]
+		return result
+
+	def get_pos2tile(self, x, y):
+		result = (x//TILE_WIDTH, y//TILE_WIDTH)
+		return result
+
+	def get_tile2pos(self, x, y, offset=(0.5, 0.5)):
+		if (offset == False):
+			offset = (0, 0)
+		result = ((x+offset[0])*TILE_WIDTH, (y+offset[1])*TILE_WIDTH)
+		return result
 
 	def load(self, filename):
 		fin = open('./data/%s.txt' % filename)
@@ -109,6 +125,8 @@ class MapData:
 						self.spawn = (colnum, linenum-1)
 					colnum += 1
 			linenum += 1
+
+
 def main():
 	pygame.init()
 
@@ -137,20 +155,9 @@ def main():
 	equipped_element_E = 'wind'
 
 
-
 	# Load in the test map
 	geometry = MapData()
 	geometry.load('map1')
-	for row in range(geometry.height):
-		line = []
-		for col in range(geometry.width):
-			val = geometry.geo[col+row*geometry.width]
-			if (val):
-				line.append('#')
-			else:
-				line.append(' ')
-		print(''.join(line))
-	quit()
 
 	while not done:
 		clock.tick(FPS)
@@ -195,6 +202,13 @@ def main():
 				print(line)
 
 		#pygame.draw.circle(screen, lightgrey, (i, j), 1, 1)
+
+		for j in range(geometry.height):
+			for i in range(geometry.width):
+				if geometry.get_geo(i, j):
+					pos = geometry.get_tile2pos(i, j)
+					pygame.draw.rect(screen, lightgrey, 
+						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))
 
 		pygame.display.flip()
 
