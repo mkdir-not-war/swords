@@ -31,8 +31,30 @@ magic_combos['neutral']['wind'] = 'refresh jump'
 magic_combos['wind']['neutral'] = 'tornado'
 magic_combos['wind']['wind'] = 'air pistol'
 
+# physics
+GROUND_FRIC = 1.0
+AIR_FRIC = 1.0
+GRAVITY_ACCEL = (0, 10)
+
+def update_physicsbodies(physicsbodies):
+	# get all new rects
+	# mark rects that collide with geometry
+	# resolve rects
+
+class PhysicsBody:
+	def __init__(self, pos=(0, 0), width=TILE_WIDTH, height=TILE_WIDTH, mass=1.0):
+		self.rect = Rect(pos, (width, height))
+		self.mass = mass
+		self.dp = (0, 0)
+		self.forces = []
+
 class Player:
 	def __init__(self):
+		# physics stuff
+		physicsbody = PhysicsBody()
+
+
+		# magic stuff
 		self.max_mana = 6
 		self.curr_mana = self.max_mana
 
