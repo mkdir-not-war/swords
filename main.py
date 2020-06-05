@@ -5,10 +5,13 @@ TILE_WIDTH = 32
 FPS = 30
 
 # physics
-GROUND_FRIC = 1.0
+GROUND_FRIC = TILE_WIDTH*60
 AIR_FRIC = 1.0
-GRAVITY_ACCEL = 10
+GRAVITY_ACCEL = TILE_WIDTH*15
 TIME_STEP = 1.0/FPS
+
+# movement
+SIDEWAYS_ACCEL = TILE_WIDTH*30
 
 def sum_tuples(tuples):
 	resultx = 0
@@ -25,12 +28,14 @@ def tuple_mult(tup, scalar):
 
 class Rect:
 	def __init__(self, pos, dim):
-		self.pos = pos
 		self.x = pos[0]
 		self.y = pos[1]
-		self.dim = dim
 		self.width = dim[0]
 		self.height = dim[1]
+
+	def copy(self):
+		result = Rect((self.x, self.y), (self.width, self.height))
+		return result
 
 	def move(self, dp):
 		self.x += dp[0]
@@ -41,17 +46,35 @@ class Rect:
 		result = ((self.x + self.width)/2.0, (self.y + self.height)/2.0)
 		return result
 
+	def get_verts(self):
+		topleft = (self.x, self.y)
+		topright = (self.x+self.width, self.y)
+		botleft = (self.x, self.y+self.height)
+		botright = (self.x+self.width, self.y+self.height)
+
+		return (topleft, topright, botleft, botright)
+
+	def get_pyrect(self):
+		result = pygame.Rect((self.x, self.y), (self.width, self.height))
+		return result
+
 	def contains_point(self, point):
 		result = (
-			point >= self.x and
-			point < self.x+self.width and
-			point >= self.y and
-			point < self.y+self.height
+			point[0] >= self.x and
+			point[0] < self.x+self.width and
+			point[1] >= self.y and
+			point[1] < self.y+self.height
 		)
 		return result
 
 	def collides_rect(self, rect):
-		sumrect = ()
+		sum_rect = Rect(
+			(self.x-rect.width/2, self.y-rect.height/2), 
+			(self.width+rect.width, self.height+rect.height)
+		)
+		point = rect.get_center()
+		result = sum_rect.contains_point(point)
+		return result
 
 grey = pygame.Color(200, 200, 200)
 lightgrey = pygame.Color(125, 125, 125)
@@ -84,12 +107,12 @@ magic_combos['neutral']['wind'] = 'refresh jump'
 magic_combos['wind']['neutral'] = 'tornado'
 magic_combos['wind']['wind'] = 'air pistol'
 
-def update_physicsbodies(physicsbodies):
+def update_physicsbodies(physicsbodies, geometry):
 	# get all new rects
 	length = 0
 	new_rects = []
 	for pb in physicsbodies:
-		newrect = pb.rect
+		newrect = pb.rect.copy()
 		length += 1
 
 		# add all forces
@@ -106,15 +129,42 @@ def update_physicsbodies(physicsbodies):
 		# put it in the list
 		new_rects.append(newrect)
 
+	marked = [False]*length
+
 	# if rect collides with geometry, clamp to nearest tile boundary
+	for ri in range(length):
+		rect = new_rects[ri]
+		tiles = geometry.get_tilesfromrect(rect)
 
-	# if rect collides with other physics bodies and is "solid", mark
+		for tile in tiles:
+			#if rect.collides_rect(tile):
 
-	# if rect is collides with an attack, mark
+			pbdp = physicsbodies[ri].dp
+
+			newrecth = pb.rect.copy()
+			newrectv = pb.rect.copy()
+
+			newrecth.move(tuple_mult((pbdp[0], 0), TIME_STEP))
+			newrectv.move(tuple_mult((0, pbdp[1]), TIME_STEP))
+
+			if (not newrecth.collides_rect(tile)):
+				new_rects[ri] = newrecth
+				physicsbodies[ri].dp = (pbdp[0], 0)
+			elif (not newrectv.collides_rect(tile)):
+				new_rects[ri] = newrectv
+				physicsbodies[ri].dp = (0, pbdp[1])
+			else:
+				marked[ri] = True
+				physicsbodies[ri].dp = (0, 0)
+
+	# if rect collides with other physics bodies and is "solid", don't move
+
+	# if rect is collides with an attack, don't move
 
 	# resolve rects
 	for pbi in range(length):
-		physicsbodies[pbi].rect = new_rects[pbi]
+		if (not marked[pbi]):
+			physicsbodies[pbi].rect = new_rects[pbi]
 
 class PhysicsBody:
 	def __init__(self, pos=(0, 0), width=TILE_WIDTH, height=TILE_WIDTH, mass=1.0):
@@ -126,6 +176,10 @@ class PhysicsBody:
 	def get_pos(self):
 		result = (self.rect.x, self.rect.y)
 		return result
+
+	def set_pos(self, pos):
+		self.rect.x = pos[0]
+		self.rect.y = pos[1]
 
 	def get_dim(self):
 		result = (self.rect.width, self.rect.height)
@@ -152,6 +206,9 @@ class Player:
 	def get_pos(self):
 		result = self.physicsbody.get_pos()
 		return result
+
+	def set_pos(self, pos):
+		self.physicsbody.set_pos(pos)
 
 def player_update(player):
 	# thirty frames per second => 33 ms per frame
@@ -201,13 +258,26 @@ class MapData:
 		return result
 
 	def get_pos2tile(self, x, y):
-		result = (x//TILE_WIDTH, y//TILE_WIDTH)
+		result = (int(x//TILE_WIDTH), int(y//TILE_WIDTH))
 		return result
 
 	def get_tile2pos(self, x, y, offset=(0.5, 0.5)):
 		if (offset == False):
 			offset = (0, 0)
 		result = ((x+offset[0])*TILE_WIDTH, (y+offset[1])*TILE_WIDTH)
+		return result
+
+	# only returns geometry (in world coord's) that is solid (i.e. True in MapData.geo)
+	def get_tilesfromrect(self, rect):
+		minx, miny = self.get_pos2tile(rect.x, rect.y)
+		maxx, maxy = self.get_pos2tile(rect.x+rect.width, rect.y+rect.height)
+
+		result = []
+		for i in range(minx, maxx+1):
+			for j in range(miny, maxy+1):
+				if self.get_geo(i, j):
+					newtile = Rect((i*TILE_WIDTH, j*TILE_WIDTH), (TILE_WIDTH, TILE_WIDTH))
+					result.append(newtile)
 		return result
 
 	def load(self, filename):
@@ -263,6 +333,7 @@ def main():
 	# Load in the test map
 	geometry = MapData()
 	geometry.load('map1')
+	player.set_pos(geometry.get_tile2pos(*geometry.spawn, offset=False))
 
 	# physics
 	physicsbodies = [player.physicsbody]
@@ -288,11 +359,18 @@ def main():
 		debug_func = player.get_pos
 
 		# keypad handle input
-		moveinput_dir = [0, 0]
 		if pygame.K_ESCAPE in curr_input:
 			done = True
 		if pygame.K_SPACE in curr_input and len(prev_input) == 0:
 			output.append(debug_func())
+
+		moveinput = 0 # only left or right
+		if pygame.K_LEFT in curr_input:
+			moveinput_dir = -1
+		if pygame.K_RIGHT in curr_input:
+			moveinput_dir = 1
+
+		# handleinput_player(player) -> move left and right, among other things
 
 		if pygame.K_q in curr_input and len(prev_input) == 0:
 			output.append(use_element(player, equipped_element_Q))
@@ -304,7 +382,7 @@ def main():
 		# updates
 		output.append(player_update(player))
 
-		update_physicsbodies(physicsbodies)
+		update_physicsbodies(physicsbodies, geometry)
 
 		# start drawing
 		screen.fill(grey)
@@ -318,9 +396,12 @@ def main():
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				if geometry.get_geo(i, j):
-					pos = geometry.get_tile2pos(i, j)
+					pos = geometry.get_tile2pos(i, j, offset=False)
 					pygame.draw.rect(screen, lightgrey, 
 						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))
+
+		pygame.draw.rect(screen, red, 
+			player.physicsbody.rect.get_pyrect())
 
 		pygame.display.flip()
 
