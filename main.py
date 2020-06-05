@@ -6,18 +6,26 @@ TILE_WIDTH = 32
 FPS = 30
 
 # physics
-HORZ_FRIC = 0.75
-VERT_FRIC = 0.75
-GRAVITY_ACCEL = TILE_WIDTH*24
+HORZ_FRIC = 0.20
+VERT_FRIC = 0.04
+GRAVITY_ACCEL = TILE_WIDTH*60
 TIME_STEP = 1.0/FPS
 
-VEL_CLAMTOZERO_RANGE = 0.02
+VEL_CLAMTOZERO_RANGE = 5.0
 
 # movement
-SIDEWAYS_ACCEL = TILE_WIDTH*15
+SIDEWAYS_ACCEL = TILE_WIDTH*90
 
 # debug tiles
 highlight = []
+
+def sign(n):
+	if (n < 0):
+		return -1
+	elif (n > 0):
+		return 1
+	else:
+		return 0
 
 def v2_dot(v1, v2):
 	result = v1[0]*v2[0] + v1[1]*v2[1]
@@ -209,13 +217,9 @@ def update_physicsbodies(physicsbodies, geometry):
 		# divide out mass
 		ddp = tuple_mult(sum_forces, 1/pb.mass)
 
-		# if velocity is sufficiently close to zero, just make it zero
-		'''
+		# if horizontal velocity is sufficiently close to zero, just make it zero
 		if (pb.dp[0] < VEL_CLAMTOZERO_RANGE and pb.dp[0] > -VEL_CLAMTOZERO_RANGE):
-			pb.dp = (0.0, pb.dp[1])
-		if (pb.dp[1] < VEL_CLAMTOZERO_RANGE and pb.dp[1] > -VEL_CLAMTOZERO_RANGE):
-			pb.dp = (pb.dp[0], 0.0)
-		'''
+			pb.dp = (0.0, pb.dp[1])	
 
 		# move() using kinematics and old velocity
 		newrect.move(v2_add(tuple_mult(ddp, TIME_STEP*TIME_STEP*0.5), tuple_mult(pb.dp, TIME_STEP)))
@@ -381,8 +385,11 @@ def player_update(player, inputdata):
 	player.physicsbody.addforce(gravity)
 
 	# apply friction
-	fric = v2_dot((player.physicsbody.dp), (-HORZ_FRIC, -VERT_FRIC))
-	#player.physicsbody.addforce(fric)
+	fric = (
+		-1*sign(player.physicsbody.dp[0])*(player.physicsbody.dp[0]**2)*HORZ_FRIC, 
+		-1*sign(player.physicsbody.dp[1])*(player.physicsbody.dp[1]**2)*VERT_FRIC
+	)
+	player.physicsbody.addforce(fric)
 
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
