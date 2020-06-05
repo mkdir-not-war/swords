@@ -6,9 +6,9 @@ TILE_WIDTH = 32
 FPS = 30
 
 # physics
-GROUND_FRIC = 0.75
-AIR_FRIC = TILE_WIDTH*2
-GRAVITY_ACCEL = TILE_WIDTH*15
+HORZ_FRIC = 0.75
+VERT_FRIC = 0.75
+GRAVITY_ACCEL = TILE_WIDTH*24
 TIME_STEP = 1.0/FPS
 
 VEL_CLAMTOZERO_RANGE = 0.02
@@ -92,7 +92,7 @@ class Rect:
 
 	def collides_rect(self, rect):
 		sum_rect = Rect(
-			(self.x-rect.width/2, self.y-rect.height/2), 
+			(self.x-rect.width/2.0, self.y-rect.height/2.0), 
 			(self.width+rect.width, self.height+rect.height)
 		)
 		point = rect.get_center()
@@ -229,44 +229,68 @@ def update_physicsbodies(physicsbodies, geometry):
 		# clear forces
 		pb.clearforces()
 
-	marked = [False]*length
+		# clear collisions
+		pb.clearcollisions()
 
 	# if rect collides with geometry, clamp to nearest tile boundary
 	for ri in range(length):
 		rect = new_rects[ri]
 		tiles = geometry.get_tilesfromrect(rect)
 
-		# if there are any tiles in get_tilesfromrect(rect), then there is a collision with geometry
-		for tile in tiles:
+		if (len(tiles) > 0):
+			# if there are any tiles in get_tilesfromrect(rect), then there is a collision with geometry
 
 			pb = physicsbodies[ri]
 			pbdp = pb.dp
-
 			nearesttilepos = geometry.get_nearesttilepos(*pb.get_pos())
+
 			newrecth = pb.rect.copy()
 			newrectv = pb.rect.copy()
+			newrecth.x += pbdp[0] * TIME_STEP
+			newrectv.y += pbdp[1] * TIME_STEP
 
-			newrecth.move(tuple_mult((pbdp[0], 0), TIME_STEP))
-			newrectv.move(tuple_mult((0, pbdp[1]), TIME_STEP))
-			
-			if (not newrecth.collides_rect(tile)):
-				new_rects[ri] = newrecth
-				physicsbodies[ri].dp = (pbdp[0], 0)
-			elif (not newrectv.collides_rect(tile)):
+			for tile in tiles:
+				if (newrecth.collides_rect(tile)):
+					if (pbdp[0] > 0):
+						pb.collide_right()
+					elif (pbdp[0] < 0):
+						pb.collide_left()
+					else:
+						assert(False)
+
+				if (newrectv.collides_rect(tile)):
+					if (pbdp[1] > 0):
+						pb.collide_down()
+					elif (pbdp[1] < 0):
+						pb.collide_up()
+					else:
+						assert(False)
+
+			if (not (pb.get_collideup() or pb.get_collidedown()) and 
+				(pb.get_collideleft() or pb.get_collideright())):
+				newrectv.x = nearesttilepos[0]
 				new_rects[ri] = newrectv
 				physicsbodies[ri].dp = (0, pbdp[1])
-			else:
-				new_rects[ri] = nearesttilepos
+
+			elif ((pb.get_collideup() or pb.get_collidedown()) and 
+				not (pb.get_collideleft() or pb.get_collideright())):
+				newrecth.y = nearesttilepos[1]
+				new_rects[ri] = newrecth
+				physicsbodies[ri].dp = (pbdp[0], 0)
+
+			elif ((pb.get_collideup() or pb.get_collidedown()) and 
+				(pb.get_collideleft() or pb.get_collideright())):
+				new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
 				physicsbodies[ri].dp = (0, 0)
 
-	# if rect collides with other physics bodies and is "solid", don't move
+
+	# if rect collides with other physics bodies and is "solid", don't move (apply backwards force??)
 
 	# if rect is collides with an attack, don't move
 
 	# resolve rects
 	for pbi in range(length):
-		if (not marked[pbi]):
-			physicsbodies[pbi].rect = new_rects[pbi]
+		physicsbodies[pbi].rect = new_rects[pbi]
 
 """
 NOTE: implementation of collision assumes all physics bodies have
@@ -278,6 +302,8 @@ class PhysicsBody:
 		self.mass = mass
 		self.dp = (0, 0)
 		self.forces = []
+
+		self.collisions = [False]*4
 
 	def get_pos(self):
 		result = (self.rect.x, self.rect.y)
@@ -296,6 +322,33 @@ class PhysicsBody:
 
 	def addforce(self, force):
 		self.forces.append(force)
+
+	def clearcollisions(self):
+		self.collisions = [False]*4
+
+	def collide_up(self):
+		self.collisions[0] = True
+	def get_collideup(self):
+		result = self.collisions[0]
+		return result
+
+	def collide_down(self):
+		self.collisions[1] = True
+	def get_collidedown(self):
+		result = self.collisions[1]
+		return result
+
+	def collide_left(self):
+		self.collisions[2] = True
+	def get_collideleft(self):
+		result = self.collisions[2]
+		return result
+
+	def collide_right(self):
+		self.collisions[3] = True
+	def get_collideright(self):
+		result = self.collisions[3]
+		return result
 
 class Player:
 	def __init__(self):
@@ -325,15 +378,11 @@ class Player:
 def player_update(player, inputdata):
 	# add physics forces (movement force handled in input handling)
 	gravity = (0, GRAVITY_ACCEL)
-	#player.physicsbody.addforce(gravity)
+	player.physicsbody.addforce(gravity)
 
-	# apply friction based on whether in the air or not
-	if (False):
-		airfric = tuple_mult((player.physicsbody.dp), -AIR_FRIC)
-		player.physicsbody.addforce(airfric)
-	else:
-		groundfric = tuple_mult((player.physicsbody.dp[0], 0), -GROUND_FRIC)
-		#player.physicsbody.addforce(groundfric)
+	# apply friction
+	fric = v2_dot((player.physicsbody.dp), (-HORZ_FRIC, -VERT_FRIC))
+	#player.physicsbody.addforce(fric)
 
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
@@ -414,7 +463,7 @@ def main():
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('flatmap')
+	geometry.load('map1')
 	player.set_pos(geometry.get_tile2pos(*geometry.spawn, offset=False))
 
 	# physics
@@ -484,17 +533,20 @@ def main():
 				if geometry.get_geo(i, j):
 					pos = geometry.get_tile2pos(i, j, offset=False)
 					pygame.draw.rect(screen, lightgrey, 
-						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))
-
-		# highlight tiles for debug
-		for tile in highlight:
-			pygame.draw.rect(screen, black, tile.get_pyrect(), 1)
+						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))		
 
 		# draw player
 		pygame.draw.rect(screen, red, 
 			player.physicsbody.rect.get_pyrect())
 
+		# highlight tiles for debug
+		for tile in highlight:
+			pygame.draw.rect(screen, black, tile.get_pyrect(), 1)
+
 		pygame.display.flip()
+
+		if (len(highlight) > 0):
+			input()
 
 	pygame.quit()
 
