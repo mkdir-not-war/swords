@@ -2,11 +2,11 @@ import pygame
 from math import sqrt
 
 #constants
-TILE_WIDTH = 32
+TILE_WIDTH = 16
 FPS = 30
 
 # physics
-HORZ_FRIC = 0.20
+HORZ_FRIC = 0.18
 VERT_FRIC = 0.04
 GRAVITY_ACCEL = TILE_WIDTH*60
 TIME_STEP = 1.0/FPS
@@ -178,6 +178,8 @@ class MapData:
 				if self.get_geo(i, j):
 					newtile = Rect((i*TILE_WIDTH, j*TILE_WIDTH), (TILE_WIDTH, TILE_WIDTH))
 					result.append(newtile)
+					global highlight
+					highlight.append(newtile)
 		return result
 
 	def load(self, filename):
@@ -186,20 +188,29 @@ class MapData:
 		for line in fin:
 			if (linenum == 0):
 				spline = line.split(',')
-				self.width = int(spline[0])
-				self.height = int(spline[1])
+				self.width = int(spline[0])*2
+				self.height = int(spline[1])*2
 			else:
-				# load geometry
+				# load geometry, each char is 2x2 tiles
 				line = line.strip('\n')
 				colnum = 0
+				botline = []
 				for char in line.strip('\n'):
 					if (char == '#'):
 						self.geo.append(True)
+						self.geo.append(True)
+						botline.append(True)
+						botline.append(True)
 					else:
 						self.geo.append(False)
+						self.geo.append(False)
+						botline.append(False)
+						botline.append(False)
 					if (char == '@'):
-						self.spawn = (colnum, linenum-1)
-					colnum += 1
+						self.spawn = (colnum*2, (linenum-1)*2)
+					colnum += 2
+				for char in botline:
+					self.geo.append(char)
 			linenum += 1
 
 def update_physicsbodies(physicsbodies, geometry):
@@ -357,7 +368,7 @@ class PhysicsBody:
 class Player:
 	def __init__(self):
 		# physics stuff
-		self.physicsbody = PhysicsBody()
+		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=2)
 
 		# magic stuff
 		self.max_mana = 6
@@ -552,8 +563,10 @@ def main():
 
 		pygame.display.flip()
 
+		'''
 		if (len(highlight) > 0):
 			input()
+		'''
 
 	pygame.quit()
 
