@@ -21,6 +21,12 @@ JUMP_ACCEL = 2800 #1460 @ 30 FPS
 JUMP_COOLDOWN_SEC = 0.2
 COYOTE_FRAMES = 2
 
+# magic
+E_NEUTRAL = 0
+E_WATER = 1
+E_FIRE = 2
+E_WIND = 3
+
 # debug tiles
 highlight = []
 
@@ -134,13 +140,13 @@ lightblue = pygame.Color(100, 100, 250)
 red = pygame.Color('red')
 black = pygame.Color('black')
 
-spell_elements = ['neutral', 'water', 'fire', 'wind']
+spell_elements = [E_NEUTRAL, E_WATER, E_FIRE, E_WIND]
 
 element_colors = {}
-element_colors['neutral'] = lightgrey
-element_colors['water'] = lightblue
-element_colors['fire'] = lightred
-element_colors['wind'] = lightgreen
+element_colors[E_NEUTRAL] = lightgrey
+element_colors[E_WATER] = lightblue
+element_colors[E_FIRE] = lightred
+element_colors[E_WIND] = lightgreen
 
 magic_combos = {}
 for e in spell_elements:
@@ -148,13 +154,13 @@ for e in spell_elements:
 
 # EE - attack, EN - buff, NE - shield
 
-magic_combos['neutral']['fire'] = 'inner flame'
-magic_combos['fire']['neutral'] = 'burn souls'
-magic_combos['fire']['fire'] = 'soul flare'
+magic_combos[E_NEUTRAL][E_FIRE] = 'inner flame'
+magic_combos[E_FIRE][E_NEUTRAL] = 'burn souls'
+magic_combos[E_FIRE][E_FIRE] = 'soul flare'
 
-magic_combos['neutral']['wind'] = 'refresh jump'
-magic_combos['wind']['neutral'] = 'tornado'
-magic_combos['wind']['wind'] = 'air pistol'
+magic_combos[E_NEUTRAL][E_WIND] = 'refresh jump'
+magic_combos[E_WIND][E_NEUTRAL] = 'tornado'
+magic_combos[E_WIND][E_WIND] = 'air pistol'
 
 class MapData:
 	def __init__(self, dim=(0, 0)):
@@ -222,8 +228,10 @@ class MapData:
 						self.geo.append(False)
 						botline.append(False)
 						botline.append(False)
+
 					if (char == '@'):
-						self.spawn = (colnum*2, (linenum-1)*2)
+						self.spawn = (colnum, (linenum-1)*2)
+
 					colnum += 2
 				for char in botline:
 					self.geo.append(char)
@@ -466,9 +474,7 @@ class Player:
 		self.time_remaining_to_recover = self.time_until_recover_mana
 
 		# spell chain breaks when mana begins recovering
-		self.max_spells_saved = self.max_mana
-		self.spells_used = [] 
-		self.spells_used_len = 0
+		self.last_element = -1
 
 	def get_pos(self):
 		result = self.physicsbody.get_pos()
@@ -508,7 +514,7 @@ def player_update(player, inputdata):
 
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
-		player.time_remaining_to_recover -= 1.0/30.0
+		player.time_remaining_to_recover -= TIME_STEP
 		if (player.time_remaining_to_recover < 0.0):
 			player.spells_used = []
 			player.spells_used_len = 0
@@ -518,6 +524,8 @@ def player_update(player, inputdata):
 				return '+'
 
 def player_handleinput(player, inputdata):
+	output = []
+
 	# move left and right
 	if (inputdata.movedirection != 0):
 		force = tuple_mult((inputdata.movedirection, 0), SIDEWAYS_ACCEL)
@@ -529,39 +537,36 @@ def player_handleinput(player, inputdata):
 		player.physicsbody.addforce(force)
 		player.can_jump = False
 
+	# use magic
+	if inputdata.element >= 0:
+		if player.curr_mana > 0:
+			element = inputdata.element
+			lastelement = player.last_element
+			output.append(element)
+			if lastelement >= 0 and element in magic_combos[lastelement]:
+				# don't expend mana until a combo is successful
+				output.append('%d+%s -> %s' % (lastelement, element, magic_combos[lastelement][element]))
+				player.curr_mana -= 1
+				player.time_remaining_to_recover = player.time_until_recover_mana
+				# refresh last element so as not to overlap combos
+				player.last_element = -1
+			else:
+				player.last_element = element
+		else:
+			output.append('out of mana')
+
+	return output
+
 class InputData:
 	def __init__(self):
 		self.movedirection = 0 # left or right
 		self.jump = False
+		self.element = -1
 
 	def clear(self):
 		self.movedirection = 0
 		self.jump = False
-
-def use_element(player, e):
-	if player.curr_mana > 0:
-		last_element = None
-		if player.spells_used_len > 0:
-			last_element = player.spells_used[player.spells_used_len-1]
-
-		player.spells_used.append(e)
-		player.spells_used_len += 1
-		while (player.spells_used_len > player.max_spells_saved):
-			player.spells_used.pop(0)
-			player.spells_used_len -= 1
-
-		player.curr_mana -= 1
-		player.time_remaining_to_recover = player.time_until_recover_mana
-
-		if not last_element is None and e in magic_combos[last_element]:
-			return magic_combos[last_element][e]
-		else:
-			#return e
-			pass
-		
-	else:
-		return 'out of mana'
-
+		self.element = -1
 
 def main():
 	pygame.init()
@@ -586,14 +591,14 @@ def main():
 	curr_input = [] # int list
 	inputdata = InputData()
 
-	equipped_element_Q = 'neutral'
-	equipped_element_W = 'fire'
-	equipped_element_E = 'wind'
+	equipped_element_Q = E_NEUTRAL
+	equipped_element_W = E_FIRE
+	equipped_element_E = E_WIND
 
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('map1')
+	geometry.load('flatmap')
 	player.set_pos(geometry.get_tile2pos(*geometry.spawn, offset=False))
 
 	# physics
@@ -639,13 +644,13 @@ def main():
 			inputdata.jump = True
 
 		if pygame.K_q in curr_input and not pygame.K_q in prev_input:
-			output.append(use_element(player, equipped_element_Q))
+			inputdata.element = equipped_element_Q
 		elif pygame.K_w in curr_input and not pygame.K_w in prev_input:
-			output.append(use_element(player, equipped_element_W))
+			inputdata.element = equipped_element_W
 		elif pygame.K_e in curr_input and not pygame.K_e in prev_input:
-			output.append(use_element(player, equipped_element_E))
+			inputdata.element = equipped_element_E
 
-		player_handleinput(player, inputdata)
+		output.extend(player_handleinput(player, inputdata))
 
 		# updates
 		output.append(player_update(player, inputdata))
