@@ -3,22 +3,21 @@ from math import sqrt
 
 #constants
 TILE_WIDTH = 16
-FPS = 30
+FPS = 60
 
 # physics
-HORZ_FRIC = 0.156
-VERT_FRIC = 0.012
-GRAVITY_ACCEL = TILE_WIDTH*55
+HORZ_FRIC = 0.00975 #0.156/16 @ 30 FPS
+VERT_FRIC = 0.00075 #0.012/16 @ 30 FPS
+GRAVITY_ACCEL = 80 #55 @ 30 FPS
 TIME_STEP = 1.0/FPS
 
+# fudge factors
 VEL_CLAMTOZERO_RANGE = 5.0
-
 RECT_FAT_MOD = 1.05
-RECT_SKINNY_MOD = 0.95
 
 # movement
-SIDEWAYS_ACCEL = TILE_WIDTH*130
-JUMP_ACCEL = TILE_WIDTH*1490
+SIDEWAYS_ACCEL = 230 #130 @ 30 FPS
+JUMP_ACCEL = 2800 #1460 @ 30 FPS
 JUMP_COOLDOWN_SEC = 0.2
 COYOTE_FRAMES = 2
 
@@ -90,13 +89,6 @@ class Rect:
 		)
 		return result
 
-	def get_skinny(self):
-		result = Rect(
-			(self.x - (self.width*RECT_SKINNY_MOD - self.width)/2, self.y), 
-			(self.width*RECT_SKINNY_MOD, self.height)
-		)
-		return result
-
 	def get_verts(self):
 		topleft = (self.x, self.y)
 		topright = (self.x+self.width, self.y)
@@ -119,7 +111,7 @@ class Rect:
 		result = (
 			point[0] > self.x and
 			point[0] < self.x+self.width and
-			point[1] >= self.y and
+			point[1] > self.y and
 			point[1] < self.y+self.height
 		)
 		return result
@@ -278,66 +270,109 @@ def update_physicsbodies(physicsbodies, geometry):
 		tiles = geometry.get_tilesfromrect(rect)
 
 		if (len(tiles) > 0):
-			# if there are any tiles in get_tilesfromrect(rect), then there is a collision with geometry
+			# if there are any tiles in get_tilesfromrect(rect), 
+			# then there is a collision with geometry
+
+			global highlight
 
 			pb = physicsbodies[ri]
 			pbdp = pb.dp
 			nearesttilepos = geometry.get_nearesttilepos(*pb.get_pos())
 
+			highlight.append((Rect(nearesttilepos, (TILE_WIDTH, TILE_WIDTH)), 'green'))
+
 			newrecth = pb.rect.copy()
-			newrectv = pb.rect.copy()
-
 			newrecth.x += pbdp[0] * TIME_STEP
+			newrecth.y = nearesttilepos[1] # this makes you fall into corners??
 
+			newrectv = pb.rect.copy()
 			newrectv.x = nearesttilepos[0] # this prevents getting caught on corners
 			newrectv.y += pbdp[1] * TIME_STEP
 
+			horzcollide = False
+			vertcollide = False
+
 			for tile in tiles:
-
-				global highlight
-				#highlight.append((tile, black))
-
-				if (newrecth.collides_rect(tile)):
+				if (pbdp[0] != 0 and newrecth.collides_rect(tile)):
+					horzcollide = True
 					if (pbdp[0] > 0):
 						pb.collide_right()
 						highlight.append((tile, 'black'))
 					elif (pbdp[0] < 0):
 						pb.collide_left()
 						highlight.append((tile, 'black'))
-					else:
-						assert(False)
 
-				if (newrectv.collides_rect(tile)):
+				if (pbdp[1] != 0 and newrectv.collides_rect(tile)):
+					vertcollide = True
 					if (pbdp[1] > 0):
 						pb.collide_down()
 						highlight.append((tile, 'red'))
 					elif (pbdp[1] < 0):
 						pb.collide_up()
 						highlight.append((tile, 'red'))
-					else:
-						assert(False)
-				
-			if (pbdp[1] > 0):
-				fatrectv = newrectv.get_fat()
-				if (pb.get_collidedown() > 0 and
-					pb.get_collideright() + pb.get_collideleft() <= 1):
 
-					#pb.collide_down()
-					pass
+			# if you've collided, and you're moving diagonally, then
+			# you would be in a horz or vert collision,
+			# UNLESS you've collided perfectly diagonally on a corner.
+			diag_tile = None
+			diag_direction = (0, 0)
+			if (pbdp[0] != 0 and pbdp[1] != 0 and not (vertcollide or horzcollide)):
+				# check if moving into the block or away from it
+				assert(len(tiles) == 1)
+				diag_direction = (tiles[0].x - pb.rect.x, tiles[0].y - pb.rect.y)
+				if (sign(pbdp[0]) == sign(diag_direction[0])):
+					diag_tile = tiles[0]
 
+			# wall
 			if (not pb.get_collidesvert() and pb.get_collideshorz()):
-				newrectv.x = nearesttilepos[0]
+				newrectv.x = nearesttilepos[0]-sign(pbdp[0]) # nudge away from walls
 				new_rects[ri] = newrectv
 				physicsbodies[ri].dp = (0, pbdp[1])
 
+			# floor and ceiling
 			elif (pb.get_collidesvert() and not pb.get_collideshorz()):
 				newrecth.y = nearesttilepos[1]
 				new_rects[ri] = newrecth
 				physicsbodies[ri].dp = (pbdp[0], 0)
 
+			# concave corner
 			elif (pb.get_collidesvert() and pb.get_collideshorz()):
 				new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
 				physicsbodies[ri].dp = (0, 0)
+
+			# convex corner, basically perfect diagonal velocity
+			elif (not diag_tile is None and not pb.get_collidesvert() and not pb.get_collideshorz()):
+				# corner is above
+				if (diag_direction[1] < 0):
+					# if falling, continue falling
+					if (pbdp[1] > 0):
+						new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
+						physicsbodies[ri].dp = (0, pbdp[1])
+					# if rising, stop velocity
+					elif (pbdp[1] < 0):
+						newrecth.y = nearesttilepos[1]
+						new_rects[ri] = newrecth
+						physicsbodies[ri].dp = (0, 0)
+				# corner is below
+				elif (diag_direction[1] > 0):
+					# if falling, check for the fat catch, otherwise hit like a wall
+					if (pbdp[1] > 0):
+						fatrectv = newrectv.get_fat()
+						if (pbdp[1] != 0 and fatrectv.collides_rect(diag_tile)):
+							pb.collide_down()
+							highlight.append((tile, 'red'))
+							newrecth.y = nearesttilepos[1]
+							new_rects[ri] = newrecth
+							physicsbodies[ri].dp = (pbdp[0], 0)
+						else:
+							newrectv.x = nearesttilepos[0]
+							new_rects[ri] = newrectv
+							physicsbodies[ri].dp = (0, pbdp[1])
+					# if rising, continue rising
+					elif (pbdp[1] < 0):
+						newrecth.y = nearesttilepos[1]
+						new_rects[ri] = newrecth
+						physicsbodies[ri].dp = (0, 0)
 
 
 	# if rect collides with other physics bodies and is "solid", don't move (apply backwards force??)
@@ -377,7 +412,7 @@ class PhysicsBody:
 		self.forces = []
 
 	def addforce(self, force):
-		self.forces.append(force)
+		self.forces.append(tuple_mult(force, TILE_WIDTH))
 
 	def clearcollisions(self):
 		self.collisions = [0]*4
@@ -638,20 +673,21 @@ def main():
 			player.physicsbody.rect.get_pyrect())
 
 		# highlight tiles for debug
-		colorlines = {}
-		ci = 0
-		for tile, color in highlight:
-			if not color in colorlines:
-				colorlines[color] = ci
-				ci += 2
-			pygame.draw.line(screen, pygame.Color(color), 
-				(tile.x, tile.y+colorlines[color]), 
-				(tile.x+tile.width-colorlines[color], tile.y+tile.height), 2
-			)
-			pygame.draw.line(screen, pygame.Color(color), 
-				(tile.x+tile.width-colorlines[color], tile.y+colorlines[color]), 
-				(tile.x, tile.y+tile.height), 2
-			)
+		DEBUG = True
+		if (DEBUG):
+			colorlines = {}
+			ci = 0
+			for tile, color in highlight:
+				if not color in colorlines:
+					colorlines[color] = ci
+					ci += 1
+				pygame.draw.rect(screen, pygame.Color(color), 
+					Rect(
+						(tile.x+ci, tile.y+ci),
+						(tile.width-ci*2, tile.height-ci*2)
+					).get_pyrect(), 
+					1
+				)
 		
 
 		pygame.display.flip()
