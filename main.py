@@ -6,15 +6,21 @@ TILE_WIDTH = 16
 FPS = 30
 
 # physics
-HORZ_FRIC = 0.18
-VERT_FRIC = 0.04
-GRAVITY_ACCEL = TILE_WIDTH*60
+HORZ_FRIC = 0.156
+VERT_FRIC = 0.012
+GRAVITY_ACCEL = TILE_WIDTH*55
 TIME_STEP = 1.0/FPS
 
 VEL_CLAMTOZERO_RANGE = 5.0
 
+RECT_FAT_MOD = 1.05
+RECT_SKINNY_MOD = 0.95
+
 # movement
-SIDEWAYS_ACCEL = TILE_WIDTH*90
+SIDEWAYS_ACCEL = TILE_WIDTH*130
+JUMP_ACCEL = TILE_WIDTH*1490
+JUMP_COOLDOWN_SEC = 0.2
+COYOTE_FRAMES = 2
 
 # debug tiles
 highlight = []
@@ -77,6 +83,20 @@ class Rect:
 		result = (self.x + self.width/2.0, self.y + self.height/2.0)
 		return result
 
+	def get_fat(self):
+		result = Rect(
+			(self.x - (self.width*RECT_FAT_MOD - self.width)/2, self.y), 
+			(self.width*RECT_FAT_MOD, self.height)
+		)
+		return result
+
+	def get_skinny(self):
+		result = Rect(
+			(self.x - (self.width*RECT_SKINNY_MOD - self.width)/2, self.y), 
+			(self.width*RECT_SKINNY_MOD, self.height)
+		)
+		return result
+
 	def get_verts(self):
 		topleft = (self.x, self.y)
 		topright = (self.x+self.width, self.y)
@@ -90,8 +110,14 @@ class Rect:
 		return result
 
 	def contains_point(self, point):
+		'''
+		using strictly gt/lt on the left and top edges so that
+		collision detection doesn't think it's colliding down
+		when rubbing a wall on the left. 
+		Easy fix and no discernable difference right now.
+		'''
 		result = (
-			point[0] >= self.x and
+			point[0] > self.x and
 			point[0] < self.x+self.width and
 			point[1] >= self.y and
 			point[1] < self.y+self.height
@@ -178,8 +204,6 @@ class MapData:
 				if self.get_geo(i, j):
 					newtile = Rect((i*TILE_WIDTH, j*TILE_WIDTH), (TILE_WIDTH, TILE_WIDTH))
 					result.append(newtile)
-					global highlight
-					highlight.append(newtile)
 		return result
 
 	def load(self, filename):
@@ -233,7 +257,8 @@ def update_physicsbodies(physicsbodies, geometry):
 			pb.dp = (0.0, pb.dp[1])	
 
 		# move() using kinematics and old velocity
-		newrect.move(v2_add(tuple_mult(ddp, TIME_STEP*TIME_STEP*0.5), tuple_mult(pb.dp, TIME_STEP)))
+		deltapos = v2_add(tuple_mult(ddp, TIME_STEP*TIME_STEP*0.5), tuple_mult(pb.dp, TIME_STEP))
+		newrect.move(deltapos)
 
 		# update velocity with integration of accel
 		pb.dp = v2_add(pb.dp, tuple_mult(ddp, TIME_STEP))
@@ -261,40 +286,56 @@ def update_physicsbodies(physicsbodies, geometry):
 
 			newrecth = pb.rect.copy()
 			newrectv = pb.rect.copy()
+
 			newrecth.x += pbdp[0] * TIME_STEP
+
+			newrectv.x = nearesttilepos[0] # this prevents getting caught on corners
 			newrectv.y += pbdp[1] * TIME_STEP
 
 			for tile in tiles:
+
+				global highlight
+				#highlight.append((tile, black))
+
 				if (newrecth.collides_rect(tile)):
 					if (pbdp[0] > 0):
 						pb.collide_right()
+						highlight.append((tile, 'black'))
 					elif (pbdp[0] < 0):
 						pb.collide_left()
+						highlight.append((tile, 'black'))
 					else:
 						assert(False)
 
 				if (newrectv.collides_rect(tile)):
 					if (pbdp[1] > 0):
 						pb.collide_down()
+						highlight.append((tile, 'red'))
 					elif (pbdp[1] < 0):
 						pb.collide_up()
+						highlight.append((tile, 'red'))
 					else:
 						assert(False)
+				
+			if (pbdp[1] > 0):
+				fatrectv = newrectv.get_fat()
+				if (pb.get_collidedown() > 0 and
+					pb.get_collideright() + pb.get_collideleft() <= 1):
 
-			if (not (pb.get_collideup() or pb.get_collidedown()) and 
-				(pb.get_collideleft() or pb.get_collideright())):
+					#pb.collide_down()
+					pass
+
+			if (not pb.get_collidesvert() and pb.get_collideshorz()):
 				newrectv.x = nearesttilepos[0]
 				new_rects[ri] = newrectv
 				physicsbodies[ri].dp = (0, pbdp[1])
 
-			elif ((pb.get_collideup() or pb.get_collidedown()) and 
-				not (pb.get_collideleft() or pb.get_collideright())):
+			elif (pb.get_collidesvert() and not pb.get_collideshorz()):
 				newrecth.y = nearesttilepos[1]
 				new_rects[ri] = newrecth
 				physicsbodies[ri].dp = (pbdp[0], 0)
 
-			elif ((pb.get_collideup() or pb.get_collidedown()) and 
-				(pb.get_collideleft() or pb.get_collideright())):
+			elif (pb.get_collidesvert() and pb.get_collideshorz()):
 				new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
 				physicsbodies[ri].dp = (0, 0)
 
@@ -318,7 +359,7 @@ class PhysicsBody:
 		self.dp = (0, 0)
 		self.forces = []
 
-		self.collisions = [False]*4
+		self.collisions = [0]*4
 
 	def get_pos(self):
 		result = (self.rect.x, self.rect.y)
@@ -339,36 +380,47 @@ class PhysicsBody:
 		self.forces.append(force)
 
 	def clearcollisions(self):
-		self.collisions = [False]*4
+		self.collisions = [0]*4
 
 	def collide_up(self):
-		self.collisions[0] = True
+		self.collisions[0] += 1
 	def get_collideup(self):
 		result = self.collisions[0]
 		return result
 
 	def collide_down(self):
-		self.collisions[1] = True
+		self.collisions[1] += 1
 	def get_collidedown(self):
 		result = self.collisions[1]
 		return result
 
 	def collide_left(self):
-		self.collisions[2] = True
+		self.collisions[2] += 1
 	def get_collideleft(self):
 		result = self.collisions[2]
 		return result
 
 	def collide_right(self):
-		self.collisions[3] = True
+		self.collisions[3] += 1
 	def get_collideright(self):
 		result = self.collisions[3]
+		return result
+
+	def get_collidesvert(self):
+		result = (self.get_collideup() + self.get_collidedown() > 0)
+		return result
+
+	def get_collideshorz(self):
+		result = (self.get_collideright() + self.get_collideleft() > 0)
 		return result
 
 class Player:
 	def __init__(self):
 		# physics stuff
 		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=2)
+		self.can_jump = False
+		self.jump_timer = 0.0
+		self.fall_timer = 0
 
 		# magic stuff
 		self.max_mana = 6
@@ -402,6 +454,23 @@ def player_update(player, inputdata):
 	)
 	player.physicsbody.addforce(fric)
 
+	# jumping logic
+	if (not player.can_jump):
+		if (player.jump_timer >= JUMP_COOLDOWN_SEC):
+			# TODO: update this for coyote-time later
+			if (player.physicsbody.get_collidedown()):
+				# reset jump timer when you hit the ground
+				player.can_jump = True
+				player.jump_timer = 0.0
+				player.fall_timer = 0
+		else:
+			player.jump_timer += TIME_STEP
+	else:
+		if (not player.physicsbody.get_collidedown()):
+			player.fall_timer += 1
+			if (player.fall_timer >= COYOTE_FRAMES):
+				player.can_jump = False
+
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
 		player.time_remaining_to_recover -= 1.0/30.0
@@ -419,12 +488,20 @@ def player_handleinput(player, inputdata):
 		force = tuple_mult((inputdata.movedirection, 0), SIDEWAYS_ACCEL)
 		player.physicsbody.addforce(force)
 
+	# jump
+	if (inputdata.jump and player.can_jump):
+		force = (0, -JUMP_ACCEL)
+		player.physicsbody.addforce(force)
+		player.can_jump = False
+
 class InputData:
 	def __init__(self):
 		self.movedirection = 0 # left or right
+		self.jump = False
 
 	def clear(self):
 		self.movedirection = 0
+		self.jump = False
 
 def use_element(player, e):
 	if player.curr_mana > 0:
@@ -523,11 +600,14 @@ def main():
 		if pygame.K_RIGHT in curr_input:
 			inputdata.movedirection = 1
 
-		if pygame.K_q in curr_input and len(prev_input) == 0:
+		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
+			inputdata.jump = True
+
+		if pygame.K_q in curr_input and not pygame.K_q in prev_input:
 			output.append(use_element(player, equipped_element_Q))
-		elif pygame.K_w in curr_input and len(prev_input) == 0:
+		elif pygame.K_w in curr_input and not pygame.K_w in prev_input:
 			output.append(use_element(player, equipped_element_W))
-		elif pygame.K_e in curr_input and len(prev_input) == 0:
+		elif pygame.K_e in curr_input and not pygame.K_e in prev_input:
 			output.append(use_element(player, equipped_element_E))
 
 		player_handleinput(player, inputdata)
@@ -554,12 +634,25 @@ def main():
 						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))		
 
 		# draw player
-		pygame.draw.rect(screen, red, 
+		pygame.draw.rect(screen, lightblue, 
 			player.physicsbody.rect.get_pyrect())
 
 		# highlight tiles for debug
-		for tile in highlight:
-			pygame.draw.rect(screen, black, tile.get_pyrect(), 1)
+		colorlines = {}
+		ci = 0
+		for tile, color in highlight:
+			if not color in colorlines:
+				colorlines[color] = ci
+				ci += 2
+			pygame.draw.line(screen, pygame.Color(color), 
+				(tile.x, tile.y+colorlines[color]), 
+				(tile.x+tile.width-colorlines[color], tile.y+tile.height), 2
+			)
+			pygame.draw.line(screen, pygame.Color(color), 
+				(tile.x+tile.width-colorlines[color], tile.y+colorlines[color]), 
+				(tile.x, tile.y+tile.height), 2
+			)
+		
 
 		pygame.display.flip()
 
