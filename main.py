@@ -326,10 +326,10 @@ def update_physicsbodies(physicsbodies, geometry):
 			diag_direction = (0, 0)
 			if (pbdp[0] != 0 and pbdp[1] != 0 and not (vertcollide or horzcollide)):
 				# check if moving into the block or away from it
-				assert(len(tiles) == 1)
-				diag_direction = (tiles[0].x - pb.rect.x, tiles[0].y - pb.rect.y)
-				if (sign(pbdp[0]) == sign(diag_direction[0])):
-					diag_tile = tiles[0]
+				for tile in tiles:
+					diag_direction = (tile.x - pb.rect.x, tile.y - pb.rect.y)
+					if (sign(pbdp[0]) == sign(diag_direction[0])):
+						diag_tile = tile
 
 			# wall
 			if (not pb.get_collidesvert() and pb.get_collideshorz()):
@@ -369,7 +369,6 @@ def update_physicsbodies(physicsbodies, geometry):
 						if (pbdp[1] != 0 and fatrectv.collides_rect(diag_tile)):
 							pb.collide_down()
 							highlight.append((tile, 'red'))
-							newrecth.y = nearesttilepos[1]
 							new_rects[ri] = newrecth
 							physicsbodies[ri].dp = (pbdp[0], 0)
 						else:
@@ -380,7 +379,7 @@ def update_physicsbodies(physicsbodies, geometry):
 					elif (pbdp[1] < 0):
 						newrecth.y = nearesttilepos[1]
 						new_rects[ri] = newrecth
-						physicsbodies[ri].dp = (0, 0)
+						physicsbodies[ri].dp = (0, pbdp[1])
 
 
 	# if rect collides with other physics bodies and is "solid", don't move (apply backwards force??)
@@ -575,7 +574,7 @@ def main():
 	screendim = (1050, 750)
 	midscreen = (screendim[0]//2, screendim[1]//2)
 	screen = pygame.display.set_mode(screendim)
-	pygame.display.set_caption("B4J prototype")
+	pygame.display.set_caption("swords")
 
 	done = False
 	clock = pygame.time.Clock()
@@ -598,7 +597,7 @@ def main():
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('flatmap')
+	geometry.load('map1')
 	player.set_pos(geometry.get_tile2pos(*geometry.spawn, offset=False))
 
 	# physics
