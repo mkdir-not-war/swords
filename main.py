@@ -509,7 +509,8 @@ def player_update(player, inputdata):
 	if (player.jumps_remaining == 0 or 
 		(player.jumps_remaining < 2 and player.magic_soul == E_WIND)):
 
-		if (player.jump_timer >= JUMP_COOLDOWN_SEC):
+		# cooldown should never prevent jumping from ground, only double jumping
+		if (player.jump_timer >= JUMP_COOLDOWN_SEC): # TODO: rearrage these if's so above is true
 			if (player.physicsbody.get_collidedown()):
 				# reset jump timer when you hit the ground
 				if (player.magic_soul == E_WIND):
