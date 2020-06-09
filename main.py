@@ -4,6 +4,7 @@ from math import sqrt
 #constants
 TILE_WIDTH = 16
 FPS = 60
+MAXINPUTQUEUELEN = 10
 
 # physics
 HORZ_FRIC = 0.00975 #0.156/16 @ 30 FPS
@@ -19,7 +20,9 @@ RECT_FAT_MOD = 1.05
 SIDEWAYS_ACCEL = 230 #130 @ 30 FPS
 JUMP_ACCEL = 2800 #1460 @ 30 FPS
 JUMP_COOLDOWN_SEC = 0.2
-COYOTE_FRAMES = 3
+
+COYOTE_FRAMES = 5
+EARLYJUMP_FRAMES = 8
 
 # magic
 E_NEUTRAL = 0
@@ -460,7 +463,7 @@ class Player:
 	def __init__(self):
 		# physics stuff
 		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=2)
-		self.can_jump = False
+		self.jumps_remaining = 0
 		self.jump_timer = 0.0
 		self.fall_timer = 0
 
@@ -472,6 +475,10 @@ class Player:
 		self.time_until_recover_mana = 3.0
 		self.time_remaining_to_recover = self.time_until_recover_mana
 
+		self.magic_soul = E_FIRE#E_WIND
+		self.magic_body = E_FIRE
+		self.magic_mind = E_FIRE
+
 		# spell chain breaks when mana begins recovering
 		self.last_element = -1
 
@@ -481,6 +488,9 @@ class Player:
 
 	def set_pos(self, pos):
 		self.physicsbody.set_pos(pos)
+
+	def halt_vert_vel(self):
+		self.physicsbody.dp = (self.physicsbody.dp[0], 0.0)
 
 def player_update(player, inputdata):
 	# add physics forces (movement force handled in input handling)
@@ -495,21 +505,30 @@ def player_update(player, inputdata):
 	player.physicsbody.addforce(fric)
 
 	# jumping logic
-	if (not player.can_jump):
+	# anything less than max jumps guarantees no coyote-time
+	if (player.jumps_remaining == 0 or 
+		(player.jumps_remaining < 2 and player.magic_soul == E_WIND)):
+
 		if (player.jump_timer >= JUMP_COOLDOWN_SEC):
-			# TODO: update this for coyote-time later
 			if (player.physicsbody.get_collidedown()):
 				# reset jump timer when you hit the ground
-				player.can_jump = True
+				if (player.magic_soul == E_WIND):
+					player.jumps_remaining = 2
+				else:
+					player.jumps_remaining = 1
 				player.jump_timer = 0.0
 				player.fall_timer = 0
 		else:
 			player.jump_timer += TIME_STEP
-	else:
-		if (not player.physicsbody.get_collidedown()):
-			player.fall_timer += 1
-			if (player.fall_timer >= COYOTE_FRAMES):
-				player.can_jump = False
+
+	# coyote time only occurs at max jumps (walking off a surface)
+	elif (not player.physicsbody.get_collidedown()):
+		player.fall_timer += 1 # depends on FPS
+		if (player.fall_timer >= COYOTE_FRAMES):
+			if (player.magic_soul == E_WIND):
+				player.jumps_remaining = 1
+			else:
+				player.jumps_remaining  = 0
 
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
@@ -525,21 +544,29 @@ def player_update(player, inputdata):
 def player_handleinput(player, inputdata):
 	output = []
 
+	movedirection = inputdata.get_movedirection()
+	jump = inputdata.get_jump()
+	recent_jump = inputdata.had_jump(True, frames=EARLYJUMP_FRAMES)
+	element = inputdata.get_element()
+
 	# move left and right
-	if (inputdata.movedirection != 0):
-		force = tuple_mult((inputdata.movedirection, 0), SIDEWAYS_ACCEL)
+	if (movedirection != 0):
+		force = tuple_mult((movedirection, 0), SIDEWAYS_ACCEL)
 		player.physicsbody.addforce(force)
 
 	# jump
-	if (inputdata.jump and player.can_jump):
+	if (jump and player.jumps_remaining > 0):
+		player.halt_vert_vel()
 		force = (0, -JUMP_ACCEL)
 		player.physicsbody.addforce(force)
-		player.can_jump = False
+		if (player.magic_soul == E_WIND):
+			player.jumps_remaining = 1
+		else:
+			player.jumps_remaining = 0
 
 	# use magic
-	if inputdata.element >= 0:
+	if element >= 0:
 		if player.curr_mana > 0:
-			element = inputdata.element
 			lastelement = player.last_element
 			output.append(element)
 			if lastelement >= 0 and element in magic_combos[lastelement]:
@@ -556,16 +583,86 @@ def player_handleinput(player, inputdata):
 
 	return output
 
-class InputData:
+class InputDataBuffer:
 	def __init__(self):
-		self.movedirection = 0 # left or right
-		self.jump = False
-		self.element = -1
+		self.maxqueuelength = MAXINPUTQUEUELEN
+		self.queuelength = 0
 
-	def clear(self):
-		self.movedirection = 0
-		self.jump = False
-		self.element = -1
+		self.movedirection = [] #left or right
+		self.jump = []
+		self.element = []
+
+	def newinput(self):
+		if (self.queuelength == self.maxqueuelength):
+			self.movedirection.pop(0)
+			self.jump.pop(0)
+			self.element.pop(0)
+		else:
+			self.queuelength += 1
+
+		# put in default values
+		self.movedirection.append(0)
+		self.jump.append(False)
+		self.element.append(-1)
+
+	def set_movedirection(self, val):
+		self.movedirection[self.queuelength-1] = val
+		return val
+
+	def get_movedirection(self):
+		result = self.movedirection[self.queuelength-1]
+		return result
+
+	def had_movedirection(self, val, frames=MAXINPUTQUEUELEN):
+		assert(frames > 0)
+		frame = self.queuelength-1
+		result = False
+		while (frame >= 0 and frame >= self.queuelength-frames):
+			if (self.movedirection[frame] == val):
+				result = True
+				return result
+			frame -= 1
+		return result
+
+	def set_jump(self, val):
+		self.jump[self.queuelength-1] = val
+		return val
+
+	def get_jump(self):
+		result = self.jump[self.queuelength-1]
+		return result
+
+	def had_jump(self, val, frames=MAXINPUTQUEUELEN):
+		assert(frames > 0)
+		frame = self.queuelength-1
+		result = False
+		while (frame >= 0 and frame >= self.queuelength-frames):
+			if (self.jump[frame] == val):
+				result = True
+				return result
+			frame -= 1
+		return result
+
+	def set_element(self, val):
+		self.element[self.queuelength-1] = val
+		return val
+
+	def get_element(self):
+		result = self.element[self.queuelength-1]
+		return result
+
+	def had_element(self, val, frames=MAXINPUTQUEUELEN):
+		assert(frames > 0)
+		frame = self.queuelength-1
+		result = False
+		while (frame >= 0 and frame >= self.queuelength-frames):
+			if (self.element[frame] == val):
+				result = True
+				return result
+			frame -= 1
+		return result
+
+
 
 def main():
 	pygame.init()
@@ -588,7 +685,7 @@ def main():
 	# input stuff
 	prev_input = []
 	curr_input = [] # int list
-	inputdata = InputData()
+	inputdata = InputDataBuffer()
 
 	equipped_element_Q = E_NEUTRAL
 	equipped_element_W = E_FIRE
@@ -613,7 +710,7 @@ def main():
 
 		# poll input, put in curr_input and prev_input
 		prev_input = curr_input[:]
-		inputdata.clear()
+		inputdata.newinput()
 		for event in pygame.event.get(): # User did something.
 			if event.type == pygame.QUIT: # If user clicked close.
 				done = True # Flag that we are done so we exit this loop.
@@ -625,29 +722,31 @@ def main():
 				if event.key in curr_input:
 					curr_input.remove(event.key)
 
-		debug_func = player.get_pos
+		def f():
+			return '*************'
+		debug_func = f
 
 		# keypad handle input
 		if pygame.K_ESCAPE in curr_input:
 			done = True
-		if pygame.K_SPACE in curr_input and len(prev_input) == 0:
+		if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
 			output.append(debug_func())
 
 		moveinput = 0 # only left or right
 		if pygame.K_LEFT in curr_input:
-			inputdata.movedirection = -1
+			inputdata.set_movedirection(-1)
 		if pygame.K_RIGHT in curr_input:
-			inputdata.movedirection = 1
+			inputdata.set_movedirection(1)
 
 		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
-			inputdata.jump = True
+			inputdata.set_jump(True)
 
 		if pygame.K_q in curr_input and not pygame.K_q in prev_input:
-			inputdata.element = equipped_element_Q
+			inputdata.set_element(equipped_element_Q)
 		elif pygame.K_w in curr_input and not pygame.K_w in prev_input:
-			inputdata.element = equipped_element_W
+			inputdata.set_element(equipped_element_W)
 		elif pygame.K_e in curr_input and not pygame.K_e in prev_input:
-			inputdata.element = equipped_element_E
+			inputdata.set_element(equipped_element_E)
 
 		output.extend(player_handleinput(player, inputdata))
 
