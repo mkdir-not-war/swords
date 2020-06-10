@@ -475,6 +475,9 @@ class Player:
 		self.jump_timer = 0.0
 		self.fall_timer = 0
 
+		# state stuff
+		self.facing_direction = 1 # start facing right? Maybe encoded in spawn location on map?
+
 		# magic stuff
 		self.max_mana = 6
 		self.curr_mana = self.max_mana
@@ -560,6 +563,7 @@ def player_handleinput(player, inputdata):
 
 	# move left and right
 	if (movedirection != 0):
+		player.facing_direction = movedirection
 		force = tuple_mult((movedirection, 0), SIDEWAYS_ACCEL)
 		player.physicsbody.addforce(force)
 
@@ -668,6 +672,40 @@ class InputDataBuffer:
 			frame -= 1
 		return result
 
+class SpriteSheet:
+	def __init__(self, image, fw, fh):
+		self.image = image
+		self.frameswidth = fw
+		self.frameheight = fh
+
+	'''
+	maybe more info required here to parse the json file that Aseprite exports
+	'''
+
+class SpriteBatch:
+	def __init__(self):
+		self.length = 0
+		self.sprites = []
+	'''
+	entities save the index into the spritebatch that their spritesheet is
+	e.g. RaceCar.png is at index 2, so all racecars have spriteIndex=2
+	'''
+
+	'''
+	dynamic loading? When you approach a scroll, load in the pngs to the spritebatch?
+	or maybe a smarter caching solution
+	vvv
+	eventually the map editor should grab all the spawns on the map and make a json
+	file that has all the filenames, framewidths and frameheights for the necessary
+	spritesheets of that map
+	'''
+
+	'''
+	retrieve frames from spritesheets for actual drawing. 
+	'''
+	def get_sprite(self, index, framerow=0, framecol=0):
+		assert(index < self.length and index >= 0)
+
 
 
 def main():
@@ -705,6 +743,9 @@ def main():
 
 	# physics
 	physicsbodies = [player.physicsbody]
+
+
+	playerimg = pygame.image.load('./res/entities/player/knight01.png')
 
 	while not done:
 		clock.tick(FPS)
@@ -778,11 +819,21 @@ def main():
 						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))		
 
 		# draw player
+		'''
 		pygame.draw.rect(screen, lightblue, 
 			player.physicsbody.rect.get_pyrect())
+		'''
+		if (player.facing_direction > 0):
+			screen.blit(playerimg, player.physicsbody.rect.get_pyrect())
+		else:
+			screen.blit(
+				pygame.transform.flip(playerimg, True, False), 
+				player.physicsbody.rect.get_pyrect()
+			)
+			
 
 		# highlight tiles for debug
-		DEBUG = True
+		DEBUG = False
 		if (DEBUG):
 			colorlines = {}
 			ci = 0
