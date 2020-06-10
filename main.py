@@ -170,7 +170,7 @@ class MapData:
 		self.width = dim[0]
 		self.height = dim[1]
 		self.geo = [] # start in top left
-		self.spawn = (0, 0)
+		self.spawn = (0, 0) # bottom left!! of spawn loc
 
 	def get_geo(self, x, y):
 		result = self.geo[x + self.width * y]
@@ -207,6 +207,11 @@ class MapData:
 					result.append(newtile)
 		return result
 
+	def get_spawn(self, physicsbody):
+		location = (self.spawn[0], self.spawn[1]-physicsbody.heightintiles)
+		result = self.get_tile2pos(*location, offset=False)
+		return result
+
 	def load(self, filename):
 		fin = open('./data/%s.txt' % filename)
 		linenum = 0
@@ -233,7 +238,8 @@ class MapData:
 						botline.append(False)
 
 					if (char == '@'):
-						self.spawn = (colnum, (linenum-1)*2)
+						# +1 on y pos to push the pos to bottom left of tile
+						self.spawn = (colnum, (linenum-1)*2+1)
 
 					colnum += 2
 				for char in botline:
@@ -399,6 +405,8 @@ height and width as integer multiples of TILE_WIDTH
 """
 class PhysicsBody:
 	def __init__(self, pos=(0, 0), widthintiles=1, heightintiles=1, mass=1.0):
+		self.widthintiles = widthintiles
+		self.heightintiles = heightintiles
 		self.rect = Rect(pos, (float(widthintiles*TILE_WIDTH), float(heightintiles*TILE_WIDTH)))
 		self.mass = mass
 		self.dp = (0, 0)
@@ -462,7 +470,7 @@ class PhysicsBody:
 class Player:
 	def __init__(self):
 		# physics stuff
-		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=2)
+		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=3)
 		self.jumps_remaining = 0
 		self.jump_timer = 0.0
 		self.fall_timer = 0
@@ -510,7 +518,7 @@ def player_update(player, inputdata):
 		(player.jumps_remaining < 2 and player.magic_soul == E_WIND)):
 
 		# cooldown should never prevent jumping from ground, only double jumping
-		if (player.jump_timer >= JUMP_COOLDOWN_SEC): # TODO: rearrage these if's so above is true
+		if (player.jump_timer >= JUMP_COOLDOWN_SEC):
 			if (player.physicsbody.get_collidedown()):
 				# reset jump timer when you hit the ground
 				if (player.magic_soul == E_WIND):
@@ -560,10 +568,7 @@ def player_handleinput(player, inputdata):
 		player.halt_vert_vel()
 		force = (0, -JUMP_ACCEL)
 		player.physicsbody.addforce(force)
-		if (player.magic_soul == E_WIND):
-			player.jumps_remaining = 1
-		else:
-			player.jumps_remaining = 0
+		player.jumps_remaining -= 1
 
 	# use magic
 	if element >= 0:
@@ -695,8 +700,8 @@ def main():
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('map1')
-	player.set_pos(geometry.get_tile2pos(*geometry.spawn, offset=False))
+	geometry.load('map2')
+	player.set_pos(geometry.get_spawn(player.physicsbody))
 
 	# physics
 	physicsbodies = [player.physicsbody]
