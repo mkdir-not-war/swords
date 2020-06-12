@@ -657,7 +657,6 @@ class SpriteBatch:
 		assert(index < self.length and index >= 0)
 
 
-
 def main():
 	pygame.init()
 
@@ -691,7 +690,20 @@ def main():
 	physicsbodies = [player.physicsbody]
 
 
+	# load images
 	playerimg = pygame.image.load('./res/entities/player/knight01.png')
+
+	# load fonts
+	''' sample font code, but pretty pygame specific.
+	# font = pygame.font.Font('fontname.ttf', 32)
+	# text = font.render('test', True, black, white)
+	# screen.blit(text, rect)
+	'''
+
+	'''
+	Probably going to be setting up some memory constructs around here
+	'''
+
 
 	while not done:
 		clock.tick(FPS)
