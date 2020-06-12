@@ -1,5 +1,6 @@
 import pygame
 from math import sqrt
+from enum import IntEnum
 
 #constants
 TILE_WIDTH = 16
@@ -144,26 +145,6 @@ red = pygame.Color('red')
 black = pygame.Color('black')
 
 spell_elements = [E_NEUTRAL, E_WATER, E_FIRE, E_WIND]
-
-element_colors = {}
-element_colors[E_NEUTRAL] = lightgrey
-element_colors[E_WATER] = lightblue
-element_colors[E_FIRE] = lightred
-element_colors[E_WIND] = lightgreen
-
-magic_combos = {}
-for e in spell_elements:
-	magic_combos[e] = {}
-
-# EE - attack, EN - buff, NE - shield
-
-magic_combos[E_NEUTRAL][E_FIRE] = 'inner flame'
-magic_combos[E_FIRE][E_NEUTRAL] = 'burn souls'
-magic_combos[E_FIRE][E_FIRE] = 'soul flare'
-
-magic_combos[E_NEUTRAL][E_WIND] = 'refresh jump'
-magic_combos[E_WIND][E_NEUTRAL] = 'tornado'
-magic_combos[E_WIND][E_WIND] = 'air pistol'
 
 class MapData:
 	def __init__(self, dim=(0, 0)):
@@ -503,7 +484,7 @@ class Player:
 	def halt_vert_vel(self):
 		self.physicsbody.dp = (self.physicsbody.dp[0], 0.0)
 
-def player_update(player, inputdata):
+def player_update(player):
 	# add physics forces (movement force handled in input handling)
 	gravity = (0, GRAVITY_ACCEL)
 	player.physicsbody.addforce(gravity)
@@ -556,10 +537,9 @@ def player_update(player, inputdata):
 def player_handleinput(player, inputdata):
 	output = []
 
-	movedirection = inputdata.get_movedirection()
-	jump = inputdata.get_jump()
-	recent_jump = inputdata.had_jump(True, frames=EARLYJUMP_FRAMES)
-	element = inputdata.get_element()
+	movedirection = inputdata.get_var(InputDataIndex.MOVE_DIR)
+	jump = (inputdata.get_var(InputDataIndex.JUMP) > 0)
+	recent_jump = inputdata.had_var(InputDataIndex.JUMP, 1, frames=EARLYJUMP_FRAMES)
 
 	# move left and right
 	if (movedirection != 0):
@@ -575,6 +555,7 @@ def player_handleinput(player, inputdata):
 		player.jumps_remaining -= 1
 
 	# use magic
+	'''
 	if element >= 0:
 		if player.curr_mana > 0:
 			lastelement = player.last_element
@@ -590,83 +571,52 @@ def player_handleinput(player, inputdata):
 				player.last_element = element
 		else:
 			output.append('out of mana')
+	'''
 
 	return output
+
+class InputDataIndex(IntEnum):
+	MOVE_DIR = 0
+	DUCK = 1
+	JUMP = 2
 
 class InputDataBuffer:
 	def __init__(self):
 		self.maxqueuelength = MAXINPUTQUEUELEN
 		self.queuelength = 0
 
-		self.movedirection = [] #left or right
-		self.jump = []
-		self.element = []
+		self.vars = []
+
+		# append in order of input data index enum
+		self.vars.append([]) # movedir 0
+		self.vars.append([]) # duck 1
+		self.vars.append([]) # jump 2
 
 	def newinput(self):
 		if (self.queuelength == self.maxqueuelength):
-			self.movedirection.pop(0)
-			self.jump.pop(0)
-			self.element.pop(0)
+			for varlist in self.vars:
+				varlist.pop(0)
 		else:
 			self.queuelength += 1
 
 		# put in default values
-		self.movedirection.append(0)
-		self.jump.append(False)
-		self.element.append(-1)
+		for varlist in self.vars:
+			varlist.append(0)
 
-	def set_movedirection(self, val):
-		self.movedirection[self.queuelength-1] = val
+	def set_var(self, var_idi, val):
+		self.vars[var_idi][self.queuelength-1] = val
 		return val
 
-	def get_movedirection(self):
-		result = self.movedirection[self.queuelength-1]
+	def get_var(self, var_idi):
+		result = self.vars[var_idi][self.queuelength-1]
 		return result
 
-	def had_movedirection(self, val, frames=MAXINPUTQUEUELEN):
+	def had_var(self, var_idi, val, frames=MAXINPUTQUEUELEN):
 		assert(frames > 0)
 		frame = self.queuelength-1
 		result = False
 		while (frame >= 0 and frame >= self.queuelength-frames):
-			if (self.movedirection[frame] == val):
-				result = True
-				return result
-			frame -= 1
-		return result
-
-	def set_jump(self, val):
-		self.jump[self.queuelength-1] = val
-		return val
-
-	def get_jump(self):
-		result = self.jump[self.queuelength-1]
-		return result
-
-	def had_jump(self, val, frames=MAXINPUTQUEUELEN):
-		assert(frames > 0)
-		frame = self.queuelength-1
-		result = False
-		while (frame >= 0 and frame >= self.queuelength-frames):
-			if (self.jump[frame] == val):
-				result = True
-				return result
-			frame -= 1
-		return result
-
-	def set_element(self, val):
-		self.element[self.queuelength-1] = val
-		return val
-
-	def get_element(self):
-		result = self.element[self.queuelength-1]
-		return result
-
-	def had_element(self, val, frames=MAXINPUTQUEUELEN):
-		assert(frames > 0)
-		frame = self.queuelength-1
-		result = False
-		while (frame >= 0 and frame >= self.queuelength-frames):
-			if (self.element[frame] == val):
+			if (self.vars[var_idi][frame] == val):
 				result = True
 				return result
 			frame -= 1
@@ -731,10 +681,6 @@ def main():
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
 
-	equipped_element_Q = E_NEUTRAL
-	equipped_element_W = E_FIRE
-	equipped_element_E = E_WIND
-
 
 	# Load in the test map
 	geometry = MapData()
@@ -779,26 +725,29 @@ def main():
 		if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
 			output.append(debug_func())
 
+		# movement
 		moveinput = 0 # only left or right
 		if pygame.K_LEFT in curr_input:
-			inputdata.set_movedirection(-1)
+			inputdata.set_var(InputDataIndex.MOVE_DIR, -1)
 		if pygame.K_RIGHT in curr_input:
-			inputdata.set_movedirection(1)
+			inputdata.set_var(InputDataIndex.MOVE_DIR, 1)
+		if pygame.K_DOWN in curr_input:
+			inputdata.set_var(InputDataIndex.DUCK, 1)
 
 		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
-			inputdata.set_jump(True)
+			inputdata.set_var(InputDataIndex.JUMP, 1)
+		
 
-		if pygame.K_q in curr_input and not pygame.K_q in prev_input:
-			inputdata.set_element(equipped_element_Q)
-		elif pygame.K_w in curr_input and not pygame.K_w in prev_input:
-			inputdata.set_element(equipped_element_W)
-		elif pygame.K_e in curr_input and not pygame.K_e in prev_input:
-			inputdata.set_element(equipped_element_E)
+
+		# attacks & combos
+		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
+			pass
+			#inputdata.set_jump(True)
 
 		output.extend(player_handleinput(player, inputdata))
 
 		# updates
-		output.append(player_update(player, inputdata))
+		output.append(player_update(player))
 
 		update_physicsbodies(physicsbodies, geometry)
 
