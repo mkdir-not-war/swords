@@ -125,13 +125,30 @@ black = pygame.Color('black')
 
 
 class MapData:
-	def __init__(self, filename):
+	def __init__(self, filename, dim=(0, 0)):
 		self.filename = filename
 
-		self.width = 0
-		self.height = 0
-		self.geo = [] # start in top left
+		self.width = dim[0]*2
+		self.height = dim[1]*2
+		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
+
+		self.newmap()
+
+	def newmap(self):
+		xs = [0, self.width//2-1]
+		ys = [0, self.height//2-1]
+
+		for j in range(self.height//2):
+			for i in range(self.width//2):
+				if (i in xs or j in ys):
+					x, y = i*2, j*2					
+					self.set_geoon(x, y)
+					self.set_geoon(x+1, y)
+					self.set_geoon(x, y+1)
+					self.set_geoon(x+1, y+1)
+
+		self.spawn = (2, self.height-3)
 
 	def get_geo(self, x, y):
 		result = self.geo[x + self.width * y]
@@ -144,20 +161,22 @@ class MapData:
 		self.geo[x + self.width * y] = False
 
 	def maptile_add(self, mtx, mty):
-		x, y = mtx*2, mty*2
-		if (not self.get_geo(x, y)):
-			self.set_geoon(x, y)
-			self.set_geoon(x+1, y)
-			self.set_geoon(x, y+1)
-			self.set_geoon(x+1, y+1)
+		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
+			x, y = mtx*2, mty*2
+			if (not self.get_geo(x, y)):
+				self.set_geoon(x, y)
+				self.set_geoon(x+1, y)
+				self.set_geoon(x, y+1)
+				self.set_geoon(x+1, y+1)
 
 	def maptile_remove(self, mtx, mty):
-		x, y = mtx*2, mty*2
-		if (self.get_geo(x, y)):
-			self.set_geooff(x, y)
-			self.set_geooff(x+1, y)
-			self.set_geooff(x, y+1)
-			self.set_geooff(x+1, y+1)
+		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
+			x, y = mtx*2, mty*2
+			if (self.get_geo(x, y)):
+				self.set_geooff(x, y)
+				self.set_geooff(x+1, y)
+				self.set_geooff(x, y+1)
+				self.set_geooff(x+1, y+1)
 
 	def get_pos2tile(self, x, y):
 		result = (int(x//TILE_WIDTH), int(y//TILE_WIDTH))
@@ -369,6 +388,17 @@ def main():
 			pygame.K_s not in prev_input):
 			filename = geometry.save()
 			print('%s saved.' % filename)
+
+		if (pygame.K_LCTRL in curr_input and 
+			pygame.K_n in curr_input and 
+			pygame.K_n not in prev_input):
+
+			print('Creating new map.')
+			filename = input('filename: ')
+			width = input('width: ')
+			height = input('height: ')
+			geometry = MapData(filename, (int(width), int(height)))
+			geometry.save()
 
 		# mouse input
 		mouse_pos = pygame.mouse.get_pos()

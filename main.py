@@ -683,7 +683,7 @@ def main():
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('map2')
+	geometry.load('map3')
 	player.set_pos(geometry.get_spawn(player.physicsbody))
 
 	# physics
