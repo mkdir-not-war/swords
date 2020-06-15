@@ -234,24 +234,32 @@ class MapData:
 		fileoutput = []
 
 		# first line: <width>,<height>
-		fileoutput.append('%d,%d' % (self.width//2, self.height//2))
+		fileoutput.append('%d,%d\n' % (self.width//2, self.height//2))
 
 		# walls(#), spaces( ) or spawn(@)
-		for i in range(10):
-			fileoutput.append('poop')
+		for j in range(self.height//2):
+			line = []
+			for i in range(self.width//2):
+				geo = self.get_geo(i*2, j*2)
+				if (geo):
+					line.append('#')
+				elif ((i*2, j*2+1) == self.spawn):
+					line.append('@')
+				else:
+					line.append(' ')
+			fileoutput.append(''.join(line) + '\n')
 
 		# open file, write fileoutput to it
-		splitfile = self.filename.split('(')
-		filenum = 1
-		if (len(splitfile) > 1):
-			filenum += int(splitfile[1][:-1])
-		self.filename = '%s(%d)' % (splitfile[0], filenum)
-
+		# strip the last '\n' from the fileoutput before writing
+		fileoutput[-1] = fileoutput[-1][:-1]
+		# write out file
 		filename = './data/%s.txt' % self.filename
 		fout = open(filename, 'w')
 		for line in fileoutput:
-			fout.write(line + '\n')
+			fout.write(line)
 		fout.close()
+
+		return filename
 
 class InputDataIndex(IntEnum):
 	MOVE_DIR = 0
@@ -300,10 +308,6 @@ class InputDataBuffer:
 			frame -= 1
 		return result
 
-def handle_input(cin, geometry):
-	if (cin == 'save'):
-		geometry.save()
-
 def main():
 	pygame.init()
 
@@ -333,7 +337,6 @@ def main():
 	while not done:
 		clock.tick(FPS)
 
-		cin = None
 		output = []
 
 		# poll input, put in curr_input and prev_input
@@ -355,18 +358,17 @@ def main():
 				if event.button in curr_input:
 					curr_input.remove(event.button)
 
-		def f():
-			return '*************'
-		debug_func = f
-
 		# keypad handle input
 		if pygame.K_ESCAPE in curr_input:
 			done = True
-		if pygame.K_RETURN in curr_input and pygame.K_RETURN not in prev_input:
-			cin = input('>> ')
-			handle_input(cin, geometry)
 		if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
 			pass
+
+		if (pygame.K_LCTRL in curr_input and 
+			pygame.K_s in curr_input and 
+			pygame.K_s not in prev_input):
+			filename = geometry.save()
+			print('%s saved.' % filename)
 
 		# mouse input
 		mouse_pos = pygame.mouse.get_pos()
