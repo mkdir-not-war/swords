@@ -129,6 +129,9 @@ lightblue = pygame.Color(100, 100, 250)
 red = pygame.Color('red')
 black = pygame.Color('black')
 
+pygame.font.init()
+font_arial = pygame.font.Font("./data/fonts/ARI.ttf", 16)
+
 ASPECT_RATIO_YX = 1.4
 
 class Camera:
@@ -427,6 +430,55 @@ class InputDataBuffer:
 			frame -= 1
 		return result
 
+class HUD_Function:
+	def __init__(self, name, func):
+		self.func = func
+		self.surface = font_arial.render(name, True, (0, 128, 0))
+
+class HUD_Element:
+	def __init__(self, geometry):
+		self.active = False
+		self.pos = None
+
+		self.geometry = geometry
+
+		self.functions = []
+		self.functions.append(HUD_Function('add geometry', self.add_geometry))
+		self.functions.append(HUD_Function('remove geometry', self.remove_geometry))
+
+		self.xoff = 10
+		self.yoff = 10
+		self.width = 160
+		self.heightperfunc = 24
+
+		self.rectdim = (self.width+self.xoff, self.heightperfunc*len(self.functions)+self.yoff*2)
+
+	def activate(self, pos):
+		self.pos = pos 
+		self.active = True
+
+	def deactivate(self):
+		self.pos = None
+		self.active = False
+
+	def draw(self, camera, screen):
+		y_offset = 0
+		screenpos = camera.gamepos2screenpos(*self.pos)
+		rect = pygame.Rect(screenpos, self.rectdim)
+		pygame.draw.rect(screen, black, rect, 3)
+		screen.fill(pygame.Color(220, 220, 220), rect)
+		for func in self.functions:
+			screen.blit(
+				func.surface, 
+				(screenpos[0]+self.xoff, screenpos[1]+y_offset+self.yoff))
+			y_offset += self.heightperfunc
+
+	def add_geometry(self):
+		pass
+
+	def remove_geometry(self):
+		pass
+
 def main():
 	pygame.init()
 
@@ -454,6 +506,8 @@ def main():
 
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
+
+	hudbox = HUD_Element(geometry)
 
 	while not done:
 		clock.tick(FPS)
@@ -503,7 +557,8 @@ def main():
 			geometry.save()
 
 		# mouse input
-		mouse_pos = camera.screenpos2gamepos(*pygame.mouse.get_pos())
+		screenmousepos = pygame.mouse.get_pos()
+		mouse_pos = camera.screenpos2gamepos(*screenmousepos)
 		mouse_maptile = None
 		# screen coords -> world coords -> tile
 		if (not mouse_pos is None):
@@ -511,16 +566,17 @@ def main():
 			mouse_maptile = (x//2, y//2)
 
 		if MOUSE_LEFT in curr_input:
-			geometry.maptile_add(*mouse_maptile)
+			#geometry.maptile_add(*mouse_maptile)
+			hudbox.deactivate()
 		if MOUSE_MID in curr_input:
-			geometry.maptile_remove(*mouse_maptile)
-		if MOUSE_RIGHT in curr_input:
-			screenmousepos = pygame.mouse.get_pos()
+			#geometry.maptile_remove(*mouse_maptile)
 			if (not camera.get_mousemoverect().contains_point(screenmousepos)):
 				center = camera.get_center()
 				delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
 				delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
 				camera.update_pos(v2_add(camera.pos, delta))
+		if MOUSE_RIGHT in curr_input:
+			hudbox.activate(mouse_pos)
 
 		# start drawing
 		screen.fill(grey)
@@ -546,7 +602,9 @@ def main():
 				).get_pyrect(), 
 				1
 			)
-		
+
+		if (hudbox.active):
+			hudbox.draw(camera, screen)
 
 		pygame.display.flip()
 
