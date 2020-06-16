@@ -12,6 +12,13 @@ MOUSE_LEFT = 1
 MOUSE_MID = 2
 MOUSE_RIGHT = 3
 
+# camera
+ZOOM_MULT = 2.0
+CAMERA_WIDTH = 1050
+CAMERA_HEIGHT = 750
+MOUSE_MOVE_BORDER_MULT = .8
+MOUSE_MOVE_SPEED_MULT = 1.7
+
 def sign(n):
 	if (n < 0):
 		return -1
@@ -122,7 +129,100 @@ lightblue = pygame.Color(100, 100, 250)
 red = pygame.Color('red')
 black = pygame.Color('black')
 
+ASPECT_RATIO_YX = 1.4
 
+class Camera:
+	def __init__(self, pos, screendim):
+
+		width = 0
+		height = 0
+		x_off = 0
+		y_off = 0
+
+		ywidth = screendim[1]*ASPECT_RATIO_YX
+
+		if (ywidth > screendim[0]):
+			width = screendim[0]
+			height = width//ASPECT_RATIO_YX
+			y_off = (screendim[1] - height)//2
+		else:
+			height = screendim[1]
+			width = height*ASPECT_RATIO_YX
+			x_off = (screendim[0] - width)//2
+
+		# screen pixels
+		self.width = width
+		self.height = height
+
+		self.x_offset = x_off
+		self.y_offset = y_off
+
+		# gamepixels * zoom = screenpixels
+		self.zoom = self.width / CAMERA_WIDTH * ZOOM_MULT
+
+		# game pos
+		self.pos = (
+			pos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
+			pos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
+
+	def update_pos(self, newpos):
+		self.pos = newpos
+
+	def get_center(self):
+		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
+		return result
+
+	def gamepos2screenpos(self, x, y):
+		xpos = x - self.pos[0]
+		ypos = y - self.pos[1]
+
+		result = (
+			xpos * self.zoom,
+			ypos * self.zoom
+		)
+
+		return result
+
+	def screenpos2gamepos(self, x, y):
+		xpos = (x - self.x_offset) // self.zoom
+		ypos = (y - self.y_offset) // self.zoom
+
+		result = (
+			xpos + self.pos[0],
+			ypos + self.pos[1]
+		)
+
+		return result
+
+	def get_camerascreen(self, window):
+		result = window.subsurface(
+			pygame.Rect(
+				(self.x_offset, self.y_offset),
+				(self.width, self.height)
+			)
+		)
+		return result
+
+	def get_mousemoverect(self):
+		borderdistx = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.width
+		borderdisty = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.height
+		result = Rect(
+			(self.x_offset + borderdistx, self.y_offset + borderdisty),
+			(self.width * MOUSE_MOVE_BORDER_MULT, self.height * MOUSE_MOVE_BORDER_MULT)
+		)
+		return result
+
+	def update_window(self):
+		surface = pygame.display.get_surface()
+		x, y = size = surface.get_width(), surface.get_height()
+		if (x < y):
+			width = x
+			height = width*ASPECT_RATIO_XY
+		else:
+			height = y
+			width = height//ASPECT_RATIO_XY
+		self.width = width
+		self.height = height
 
 class MapData:
 	def __init__(self, filename, dim=(0, 0)):
@@ -331,9 +431,8 @@ def main():
 	pygame.init()
 
 	# Set the width and height of the screen (width, height).
-	screendim = (1050, 750)
-	midscreen = (screendim[0]//2, screendim[1]//2)
-	screen = pygame.display.set_mode(screendim)
+	screendim = (800, 750)#(1050, 750)
+	window = pygame.display.set_mode(screendim)
 	pygame.display.set_caption("swords")
 
 	done = False
@@ -346,12 +445,15 @@ def main():
 	prev_input = []
 	curr_input = [] # int list
 	# may have to make input lists into dicts, with "key" and "mouse" keys
-	mousepos = None
+	mouse_pos = None
 	inputdata = InputDataBuffer()
 
 	# Load in the test map
 	geometry = MapData('map2')
 	geometry.load()
+
+	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
+	screen = camera.get_camerascreen(window)
 
 	while not done:
 		clock.tick(FPS)
@@ -401,7 +503,7 @@ def main():
 			geometry.save()
 
 		# mouse input
-		mouse_pos = pygame.mouse.get_pos()
+		mouse_pos = camera.screenpos2gamepos(*pygame.mouse.get_pos())
 		mouse_maptile = None
 		# screen coords -> world coords -> tile
 		if (not mouse_pos is None):
@@ -412,8 +514,13 @@ def main():
 			geometry.maptile_add(*mouse_maptile)
 		if MOUSE_MID in curr_input:
 			geometry.maptile_remove(*mouse_maptile)
-		if MOUSE_RIGHT in curr_input and MOUSE_RIGHT not in prev_input:
-			print('poop right')
+		if MOUSE_RIGHT in curr_input:
+			screenmousepos = pygame.mouse.get_pos()
+			if (not camera.get_mousemoverect().contains_point(screenmousepos)):
+				center = camera.get_center()
+				delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
+				delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
+				camera.update_pos(v2_add(camera.pos, delta))
 
 		# start drawing
 		screen.fill(grey)
@@ -425,19 +532,21 @@ def main():
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				if geometry.get_geo(i, j):
-					pos = geometry.get_tile2pos(i, j, offset=False)
+					pos = camera.gamepos2screenpos(*geometry.get_tile2pos(i, j, offset=False))
 					pygame.draw.rect(screen, lightgrey, 
-						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))		
+						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))		
 
+		
 		if (not mouse_pos is None):
 			pygame.draw.rect(screen, black, 
-				Rect(
-					(mouse_pos[0] - mouse_pos[0]%(TILE_WIDTH*2), 
+				Rect(camera.gamepos2screenpos(
+					mouse_pos[0] - mouse_pos[0]%(TILE_WIDTH*2), 
 					mouse_pos[1] - mouse_pos[1]%(TILE_WIDTH*2)),
-					(TILE_WIDTH*2, TILE_WIDTH*2)
+					(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
 				).get_pyrect(), 
 				1
 			)
+		
 
 		pygame.display.flip()
 
