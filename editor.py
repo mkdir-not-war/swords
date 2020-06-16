@@ -434,11 +434,15 @@ class HUD_Function:
 	def __init__(self, name, func):
 		self.func = func
 		self.surface = font_arial.render(name, True, (0, 128, 0))
+		self.highlighted = font_arial.render(name, True, (200, 0, 0))
+		self.yoff = 0
+		self.mousehover = False
 
 class HUD_Element:
 	def __init__(self, geometry):
 		self.active = False
 		self.pos = None
+		self.maptile = None
 
 		self.geometry = geometry
 
@@ -453,31 +457,68 @@ class HUD_Element:
 
 		self.rectdim = (self.width+self.xoff, self.heightperfunc*len(self.functions)+self.yoff*2)
 
-	def activate(self, pos):
+		y_offset = 0
+		for f in self.functions:
+			f.y_offset = y_offset
+			y_offset += self.heightperfunc
+
+	def activate(self, pos, maptile):
 		self.pos = pos 
+		self.maptile = maptile
 		self.active = True
 
 	def deactivate(self):
 		self.pos = None
+		self.maptile = None
 		self.active = False
 
+	def checkmouse(self, camera, mouse_screenpos):
+		assert(self.active)
+		screenpos = camera.gamepos2screenpos(*self.pos)
+
+		for func in self.functions:
+			func.mousehover = False
+			rect = Rect(
+				(screenpos[0], 
+					screenpos[1] + func.y_offset + self.yoff - self.heightperfunc*.1),
+				(self.width, self.heightperfunc*.8)
+			)
+			if (rect.contains_point(mouse_screenpos)):
+				func.mousehover = True
+				return func.func
+
+		return None
+
 	def draw(self, camera, screen):
-		y_offset = 0
 		screenpos = camera.gamepos2screenpos(*self.pos)
 		rect = pygame.Rect(screenpos, self.rectdim)
 		pygame.draw.rect(screen, black, rect, 3)
 		screen.fill(pygame.Color(220, 220, 220), rect)
 		for func in self.functions:
-			screen.blit(
-				func.surface, 
-				(screenpos[0]+self.xoff, screenpos[1]+y_offset+self.yoff))
-			y_offset += self.heightperfunc
+			text = func.surface
+			if (func.mousehover):
+				text = func.highlighted
+			screen.blit(text, 
+				(screenpos[0]+self.xoff, 
+					screenpos[1] + func.y_offset + self.yoff)
+			)
+			if (func.mousehover):
+				pygame.draw.rect(
+					screen,
+					black,
+					Rect(
+						(screenpos[0] + self.xoff//2, 
+							screenpos[1] + func.y_offset + self.yoff - self.heightperfunc*.05),
+						(self.width, self.heightperfunc*.9)
+					).get_pyrect(),
+					2
+				)
 
 	def add_geometry(self):
-		pass
+		self.geometry.maptile_add(*self.maptile)
 
 	def remove_geometry(self):
-		pass
+		self.geometry.maptile_remove(*self.maptile)
 
 def main():
 	pygame.init()
@@ -565,18 +606,27 @@ def main():
 			x, y = geometry.get_pos2tile(*mouse_pos) 
 			mouse_maptile = (x//2, y//2)
 
-		if MOUSE_LEFT in curr_input:
-			#geometry.maptile_add(*mouse_maptile)
-			hudbox.deactivate()
+		# check for mouse hover on HUD functions
+		hudfunc = None
+		if (hudbox.active):
+			hudfunc = hudbox.checkmouse(camera, screenmousepos)
+
+		if MOUSE_LEFT in curr_input and not MOUSE_LEFT in prev_input:
+			if (hudbox.active):
+				if (not hudfunc is None):
+					hudfunc()
+				else:
+					hudbox.deactivate()
+
 		if MOUSE_MID in curr_input:
-			#geometry.maptile_remove(*mouse_maptile)
 			if (not camera.get_mousemoverect().contains_point(screenmousepos)):
 				center = camera.get_center()
 				delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
 				delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
 				camera.update_pos(v2_add(camera.pos, delta))
-		if MOUSE_RIGHT in curr_input:
-			hudbox.activate(mouse_pos)
+
+		if MOUSE_RIGHT in curr_input and not MOUSE_RIGHT in prev_input:
+			hudbox.activate(mouse_pos, mouse_maptile)
 
 		# start drawing
 		screen.fill(grey)
@@ -594,10 +644,13 @@ def main():
 
 		
 		if (not mouse_pos is None):
+			mpos = mouse_pos
+			if (hudbox.active):
+				mpos = hudbox.pos
 			pygame.draw.rect(screen, black, 
 				Rect(camera.gamepos2screenpos(
-					mouse_pos[0] - mouse_pos[0]%(TILE_WIDTH*2), 
-					mouse_pos[1] - mouse_pos[1]%(TILE_WIDTH*2)),
+					mpos[0] - mpos[0]%(TILE_WIDTH*2), 
+					mpos[1] - mpos[1]%(TILE_WIDTH*2)),
 					(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
 				).get_pyrect(), 
 				1
