@@ -1,6 +1,8 @@
 import pygame
 from math import sqrt
 from enum import IntEnum
+from tkinter import Tk 
+from tkinter.filedialog import askopenfilename
 
 # constants
 TILE_WIDTH = 16
@@ -175,7 +177,7 @@ class Camera:
 		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
 		return result
 
-	def gamepos2screenpos(self, x, y):
+	def game2screen(self, x, y):
 		xpos = x - self.pos[0]
 		ypos = y - self.pos[1]
 
@@ -186,7 +188,7 @@ class Camera:
 
 		return result
 
-	def screenpos2gamepos(self, x, y):
+	def screen2cam(self, x, y):
 		xpos = (x - self.x_offset) // self.zoom
 		ypos = (y - self.y_offset) // self.zoom
 
@@ -388,6 +390,10 @@ class InputDataIndex(IntEnum):
 	DUCK = 1
 	JUMP = 2
 
+class InputMode(IntEnum):
+	NORMAL = 0
+	PAINT = 1
+
 class InputDataBuffer:
 	def __init__(self):
 		self.maxqueuelength = MAXINPUTQUEUELEN
@@ -472,15 +478,15 @@ class HUD_Element:
 		self.maptile = None
 		self.active = False
 
-	def checkmouse(self, camera, mouse_screenpos):
+	def checkmouse(self, camera, mpos):
 		assert(self.active)
-		screenpos = camera.gamepos2screenpos(*self.pos)
-
+		screenpos = camera.game2screen(*self.pos)
+		mouse_screenpos = camera.game2screen(*mpos)
 		for func in self.functions:
 			func.mousehover = False
 			rect = Rect(
 				(screenpos[0], 
-					screenpos[1] + func.y_offset + self.yoff - self.heightperfunc*.1),
+					screenpos[1] + func.y_offset + self.yoff - self.heightperfunc*.05),
 				(self.width, self.heightperfunc*.8)
 			)
 			if (rect.contains_point(mouse_screenpos)):
@@ -490,7 +496,7 @@ class HUD_Element:
 		return None
 
 	def draw(self, camera, screen):
-		screenpos = camera.gamepos2screenpos(*self.pos)
+		screenpos = camera.game2screen(*self.pos)
 		rect = pygame.Rect(screenpos, self.rectdim)
 		pygame.draw.rect(screen, black, rect, 3)
 		screen.fill(pygame.Color(220, 220, 220), rect)
@@ -522,6 +528,7 @@ class HUD_Element:
 
 def main():
 	pygame.init()
+	Tk().withdraw()
 
 	# Set the width and height of the screen (width, height).
 	screendim = (800, 750)#(1050, 750)
@@ -549,6 +556,9 @@ def main():
 	screen = camera.get_camerascreen(window)
 
 	hudbox = HUD_Element(geometry)
+
+	inputmode = InputMode.NORMAL
+	paintmodefile = None
 
 	while not done:
 		clock.tick(FPS)
@@ -580,6 +590,32 @@ def main():
 		if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
 			pass
 
+		# swap input modes
+		if (pygame.K_0 in curr_input and pygame.K_0 not in prev_input and 
+			inputmode==InputMode.PAINT):
+			inputmode = InputMode.NORMAL
+			print("switching to normal mode.")
+		elif pygame.K_1 in curr_input and pygame.K_1 not in prev_input:
+			if (inputmode == InputMode.NORMAL):
+				inputmode = InputMode.PAINT
+				print("switching to paint mode.")
+				if (paintmodefile is None):
+					sobjfilename = askopenfilename().split("/")
+					if ('res' in sobjfilename):
+						# assumes only one "res" folder in the path
+						resindex = sobjfilename.index('res')
+						paintmodefile = './' + '/'.join(sobjfilename[resindex:])
+						print('paint object changed to %s' % paintmodefile)
+				else:
+					print("to switch objects, press 1 again.")
+			elif (inputmode == InputMode.PAINT):
+				sobjfilename = askopenfilename().split("/")
+				if ('res' in sobjfilename):
+					# assumes only one "res" folder in the path
+					resindex = sobjfilename.index('res') 
+					paintmodefile = './' + '/'.join(sobjfilename[resindex:])
+					print('paint object changed to %s' % paintmodefile)
+
 		if (pygame.K_LCTRL in curr_input and 
 			pygame.K_s in curr_input and 
 			pygame.K_s not in prev_input):
@@ -599,34 +635,42 @@ def main():
 
 		# mouse input
 		screenmousepos = pygame.mouse.get_pos()
-		mouse_pos = camera.screenpos2gamepos(*screenmousepos)
+		mouse_pos = camera.screen2cam(*screenmousepos)
 		mouse_maptile = None
 		# screen coords -> world coords -> tile
 		if (not mouse_pos is None):
 			x, y = geometry.get_pos2tile(*mouse_pos) 
 			mouse_maptile = (x//2, y//2)
 
-		# check for mouse hover on HUD functions
-		hudfunc = None
-		if (hudbox.active):
-			hudfunc = hudbox.checkmouse(camera, screenmousepos)
-
-		if MOUSE_LEFT in curr_input and not MOUSE_LEFT in prev_input:
+		# check input modes
+		if (inputmode == InputMode.NORMAL):
+			# check for mouse hover on HUD functions
+			hudfunc = None
 			if (hudbox.active):
-				if (not hudfunc is None):
-					hudfunc()
-				else:
+				hudfunc = hudbox.checkmouse(camera, mouse_pos)
+
+			if MOUSE_LEFT in curr_input and not MOUSE_LEFT in prev_input:
+				if (hudbox.active):
+					if (not hudfunc is None):
+						hudfunc()
 					hudbox.deactivate()
 
-		if MOUSE_MID in curr_input:
-			if (not camera.get_mousemoverect().contains_point(screenmousepos)):
-				center = camera.get_center()
-				delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
-				delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
-				camera.update_pos(v2_add(camera.pos, delta))
+			if MOUSE_MID in curr_input:
+				if (not camera.get_mousemoverect().contains_point(screenmousepos)):
+					center = camera.get_center()
+					delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
+					delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
+					camera.update_pos(v2_add(camera.pos, delta))
 
-		if MOUSE_RIGHT in curr_input and not MOUSE_RIGHT in prev_input:
-			hudbox.activate(mouse_pos, mouse_maptile)
+			if MOUSE_RIGHT in curr_input and not MOUSE_RIGHT in prev_input:
+				hudbox.activate(mouse_pos, mouse_maptile)
+
+		elif (inputmode == InputMode.PAINT):
+			if MOUSE_LEFT in curr_input:
+				geometry.maptile_add(*mouse_maptile)
+			elif MOUSE_RIGHT in curr_input:
+				geometry.maptile_remove(*mouse_maptile)
+				
 
 		# start drawing
 		screen.fill(grey)
@@ -638,7 +682,7 @@ def main():
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				if geometry.get_geo(i, j):
-					pos = camera.gamepos2screenpos(*geometry.get_tile2pos(i, j, offset=False))
+					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
 					pygame.draw.rect(screen, lightgrey, 
 						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))		
 
@@ -648,7 +692,7 @@ def main():
 			if (hudbox.active):
 				mpos = hudbox.pos
 			pygame.draw.rect(screen, black, 
-				Rect(camera.gamepos2screenpos(
+				Rect(camera.game2screen(
 					mpos[0] - mpos[0]%(TILE_WIDTH*2), 
 					mpos[1] - mpos[1]%(TILE_WIDTH*2)),
 					(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
