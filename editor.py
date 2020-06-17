@@ -3,6 +3,7 @@ from math import sqrt
 from enum import IntEnum
 from tkinter import Tk 
 from tkinter.filedialog import askopenfilename
+import sys
 
 # constants
 TILE_WIDTH = 16
@@ -126,6 +127,7 @@ grey = pygame.Color(200, 200, 200)
 lightgrey = pygame.Color(125, 125, 125)
 darkred = pygame.Color(80, 0, 0)
 lightred = pygame.Color(250, 100, 100)
+green = pygame.Color(0, 250, 0)
 lightgreen = pygame.Color(100, 250, 100)
 lightblue = pygame.Color(100, 100, 250)
 red = pygame.Color('red')
@@ -319,15 +321,28 @@ class MapData:
 		result = self.get_tile2pos(*location, offset=False)
 		return result
 
+	def set_spawn(self, x, y):
+		self.spawn = (x*2, y*2+1)
+
 	def load(self):
 		fin = open('./data/%s.txt' % self.filename)
+
+		loadphase = 0
+
 		linenum = 0
 		for line in fin:
-			if (linenum == 0):
+			if (line == '~\n'):
+				linenum = 0
+				loadphase += 1
+				continue
+
+			if (loadphase == 0):
 				spline = line.split(',')
 				self.width = int(spline[0])*2
 				self.height = int(spline[1])*2
-			else:
+			elif (loadphase == 1):
+				print(line)
+			elif (loadphase == 2):
 				# load geometry, each char is 2x2 tiles
 				line = line.strip('\n')
 				colnum = 0
@@ -346,12 +361,14 @@ class MapData:
 
 					if (char == '@'):
 						# +1 on y pos to push the pos to bottom left of tile
-						self.spawn = (colnum, (linenum-1)*2+1)
+						self.spawn = (colnum, linenum*2+1)
 
 					colnum += 2
 				for char in botline:
 					self.geo.append(char)
+			
 			linenum += 1
+				
 		fin.close()
 
 	def save(self):
@@ -359,6 +376,10 @@ class MapData:
 
 		# first line: <width>,<height>
 		fileoutput.append('%d,%d\n' % (self.width//2, self.height//2))
+		fileoutput.append('~\n')
+
+		# output sprite positions
+		fileoutput.append('~\n')
 
 		# walls(#), spaces( ) or spawn(@)
 		for j in range(self.height//2):
@@ -455,6 +476,7 @@ class HUD_Element:
 		self.functions = []
 		self.functions.append(HUD_Function('add geometry', self.add_geometry))
 		self.functions.append(HUD_Function('remove geometry', self.remove_geometry))
+		self.functions.append(HUD_Function('set spawn', self.set_spawn))
 
 		self.xoff = 10
 		self.yoff = 10
@@ -526,12 +548,15 @@ class HUD_Element:
 	def remove_geometry(self):
 		self.geometry.maptile_remove(*self.maptile)
 
-def main():
+	def set_spawn(self):
+		self.geometry.set_spawn(*self.maptile)
+
+def main(argv):
 	pygame.init()
 	Tk().withdraw()
 
 	# Set the width and height of the screen (width, height).
-	screendim = (800, 750)#(1050, 750)
+	screendim = (800, 600)#(1050, 750)
 	window = pygame.display.set_mode(screendim)
 	pygame.display.set_caption("swords")
 
@@ -549,7 +574,12 @@ def main():
 	inputdata = InputDataBuffer()
 
 	# Load in the test map
-	geometry = MapData('map2')
+	mapname = ''
+	if (len(argv) > 0):
+		mapname = argv[0]
+	else:
+		mapname = input('map name: ')
+	geometry = MapData(mapname)
 	geometry.load()
 
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
@@ -562,8 +592,6 @@ def main():
 
 	while not done:
 		clock.tick(FPS)
-
-		output = []
 
 		# poll input, put in curr_input and prev_input
 		prev_input = curr_input[:]
@@ -675,18 +703,25 @@ def main():
 		# start drawing
 		screen.fill(grey)
 
-		for line in output:
-			if (not line is None):
-				print(line)
-
+		# draw geometry
+		# TODO: only draw stuff that collides with camera rect
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				if geometry.get_geo(i, j):
 					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
 					pygame.draw.rect(screen, lightgrey, 
-						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))		
+						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))	
 
-		
+		# draw spawn location
+		spawnpos = geometry.spawn
+		pygame.draw.rect(screen, green, 
+			Rect(camera.game2screen(*geometry.get_tile2pos(spawnpos[0], spawnpos[1]-1, offset=False)),
+				(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
+			).get_pyrect(), 
+			2
+		)
+
+		# draw outline of selected/hover tile
 		if (not mouse_pos is None):
 			mpos = mouse_pos
 			if (hudbox.active):
@@ -709,4 +744,4 @@ def main():
 	pygame.quit()
 
 if __name__=='__main__':
-	main()
+	main(sys.argv[1:])
