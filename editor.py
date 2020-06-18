@@ -231,6 +231,15 @@ class Camera:
 		self.width = width
 		self.height = height
 
+class GeometryObject:
+	def __init__(self, name, tilewidth, tileheight):
+		self.name = name
+		self.filename = "./res/scene/geometry/%s.png" % name
+		self.maptile_dim = (tilewidth, tileheight)
+
+	def get_sprite(self):
+		result = 
+
 class MapData:
 	def __init__(self, filename, dim=(0, 0)):
 		self.filename = filename
@@ -239,6 +248,9 @@ class MapData:
 		self.height = dim[1]*2
 		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
+
+		self.spriteindex_geo = [-1] * (self.width * self.height)
+		self.spriteindex_bg = [-1] * (self.width * self.height)
 
 		self.newmap()
 
@@ -324,7 +336,7 @@ class MapData:
 	def set_spawn(self, x, y):
 		self.spawn = (x*2, y*2+1)
 
-	def load(self):
+	def load(self, spritebatch):
 		fin = open('./data/%s.txt' % self.filename)
 
 		loadphase = 0
@@ -337,12 +349,22 @@ class MapData:
 				continue
 
 			if (loadphase == 0):
+				# map size
 				spline = line.split(',')
 				self.width = int(spline[0])*2
 				self.height = int(spline[1])*2
 			elif (loadphase == 1):
-				print(line)
+				# load spawn position
+				spline = line.split(',')
+				# +1 on y pos to push the pos to bottom left of tile
+				self.spawn = (int(spline[0])*2, int(spline[1])*2 + 1)
 			elif (loadphase == 2):
+				# load sprites
+				index = spritebatch.add(line.strip('\n'))
+			elif (loadphase == 3):
+				# load middleground, each char is 2x2 tiles
+
+			elif (loadphase == 4):
 				# load geometry, each char is 2x2 tiles
 				line = line.strip('\n')
 				colnum = 0
@@ -359,17 +381,15 @@ class MapData:
 						botline.append(False)
 						botline.append(False)
 
-					if (char == '@'):
-						# +1 on y pos to push the pos to bottom left of tile
-						self.spawn = (colnum, linenum*2+1)
-
 					colnum += 2
 				for char in botline:
 					self.geo.append(char)
+
 			
 			linenum += 1
 				
 		fin.close()
+		return spritebatch
 
 	def save(self):
 		fileoutput = []
@@ -550,6 +570,53 @@ class HUD_Element:
 
 	def set_spawn(self):
 		self.geometry.set_spawn(*self.maptile)
+
+class SpriteSheet:
+	def __init__(self, name):
+		self.name = name
+
+		self.image = None
+		self.tileswide = 0
+		self.tilestall = 0
+		self.frameswide = 0
+		self.framestall = 0
+
+		self.loadsprite(name)
+
+		# use this var to determine when to unload
+		self.numloadedmapsusing = 1
+
+	def loadsprite(self, name):
+		# parse the spritedata.json file in ./data
+		pass
+
+	'''
+	maybe more info required here to parse the json file that Aseprite exports
+	'''
+
+# one spritebatch for animated sprites, one for not (i.e. geometry)
+class SpriteBatch:
+	def __init__(self):
+		self.length = 0
+		self.sprites = []
+
+	def add(self, spritename):
+		result = -1
+		for i in range(self.length):
+			if spritename == self.sprites[i]:
+				result = i
+		if (result < 0):
+			# load the new sprite in
+			newspritesheet = SpriteSheet(spritename)
+			self.sprites.append(newspritesheet)
+			result = length
+			self.length += 1
+
+		return result
+
+	def remove(self, spritename):
+		# check numloadedmapusing -- if zero, then unload
+		pass
 
 def main(argv):
 	pygame.init()

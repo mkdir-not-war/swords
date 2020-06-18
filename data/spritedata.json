@@ -1,0 +1,44 @@
+{
+	"greybox" : {
+		"file" : "./res/scene/geometry/greybox.png",
+		"tileswide" : "2",
+		"tilestall" : "2",
+		"frameswide" : "1",
+		"framestall" : "1"
+	},
+	"bluebox" : {
+		"file" : "./res/scene/geometry/bluebox.png",
+		"tileswide" : "2",
+		"tilestall" : "2",
+		"frameswide" : "1",
+		"framestall" : "1"
+	},
+	"darkpurplebox" : {
+		"file" : "./res/scene/geometry/darkpurplebox.png",
+		"tileswide" : "2",
+		"tilestall" : "2",
+		"frameswide" : "1",
+		"framestall" : "1"
+	},
+	"knight01" : {
+		"file" : "./res/actors/player/knight01.png",
+		"tileswide" : "2",
+		"tilestall" : "3",
+		"frameswide" : "1",
+		"framestall" : "1"
+	},
+	"dirt-center" : {
+		"file" : "./res/scene/geometry/dirt-center.png",
+		"tileswide" : "2",
+		"tilestall" : "2",
+		"frameswide" : "1",
+		"framestall" : "1"
+	},
+	"dirt-grasstop" : {
+		"file" : "./res/scene/geometry/dirt-grasstop.png",
+		"tileswide" : "2",
+		"tilestall" : "2",
+		"frameswide" : "1",
+		"framestall" : "1"
+	}
+}
