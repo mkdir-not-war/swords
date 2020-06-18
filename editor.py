@@ -4,6 +4,7 @@ from enum import IntEnum
 from tkinter import Tk 
 from tkinter.filedialog import askopenfilename
 import sys
+import json
 
 # constants
 TILE_WIDTH = 16
@@ -75,6 +76,10 @@ class Rect:
 		self.x += dp[0]
 		self.y += dp[1]
 		return self
+
+	def get_dim(self):
+		result = (self.width, self.height)
+		return result
 
 	def get_center(self):
 		result = (self.x + self.width/2.0, self.y + self.height/2.0)
@@ -231,15 +236,6 @@ class Camera:
 		self.width = width
 		self.height = height
 
-class GeometryObject:
-	def __init__(self, name, tilewidth, tileheight):
-		self.name = name
-		self.filename = "./res/scene/geometry/%s.png" % name
-		self.maptile_dim = (tilewidth, tileheight)
-
-	def get_sprite(self):
-		result = 
-
 class MapData:
 	def __init__(self, filename, dim=(0, 0)):
 		self.filename = filename
@@ -249,10 +245,12 @@ class MapData:
 		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
 
+		# Since tile = 2x2, these will both be at least 3/4th empty. 
+		# May need to optimize somehow
 		self.spriteindex_geo = [-1] * (self.width * self.height)
-		self.spriteindex_bg = [-1] * (self.width * self.height)
+		self.spriteindex_mg = [-1] * (self.width * self.height)
 
-		self.newmap()
+		#self.newmap()
 
 	def newmap(self):
 		xs = [0, self.width//2-1]
@@ -268,6 +266,14 @@ class MapData:
 					self.set_geoon(x+1, y+1)
 
 		self.spawn = (2, self.height-3)
+
+	def get_geospriteindex(self, x, y):
+		result = self.spriteindex_geo[x + self.width * y]
+		return result
+
+	def get_mgspriteindex(self, x, y):
+		result = self.spriteindex_mg[x + self.width * y]
+		return result
 
 	def get_geo(self, x, y):
 		result = self.geo[x + self.width * y]
@@ -312,7 +318,10 @@ class MapData:
 		return result
 
 	def get_nearesttilepos(self, x, y):
-		result = ((x+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH, (y+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH)
+		result = (
+			(x+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH, 
+			(y+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH
+		)
 		return result
 
 	# only returns geometry (in world coord's) that is solid (i.e. True in MapData.geo)
@@ -337,9 +346,10 @@ class MapData:
 		self.spawn = (x*2, y*2+1)
 
 	def load(self, spritebatch):
-		fin = open('./data/%s.txt' % self.filename)
+		fin = open('./data/maps/%s.txt' % self.filename)
 
 		loadphase = 0
+		spriteindextranslator = [None]
 
 		linenum = 0
 		for line in fin:
@@ -350,38 +360,50 @@ class MapData:
 
 			if (loadphase == 0):
 				# map size
-				spline = line.split(',')
-				self.width = int(spline[0])*2
-				self.height = int(spline[1])*2
+				width, height = line.strip('\n').split(',')
+				width = int(width) * 2
+				height = int(height) * 2
+
+				self.width = width
+				self.height = height
+
+				self.geo = [False] * (width * height)
+				self.spriteindex_geo = [-1] * (width * height)
+				self.spriteindex_mg = [-1] * (width * height)
 			elif (loadphase == 1):
 				# load spawn position
-				spline = line.split(',')
+				spline = line.strip('\n').split(',')
 				# +1 on y pos to push the pos to bottom left of tile
 				self.spawn = (int(spline[0])*2, int(spline[1])*2 + 1)
 			elif (loadphase == 2):
 				# load sprites
-				index = spritebatch.add(line.strip('\n'))
+				name = line.strip('\n').split(',')[1]
+				index = spritebatch.add(name)
+				spriteindextranslator.append(index)
+
 			elif (loadphase == 3):
 				# load middleground, each char is 2x2 tiles
+				pass
 
 			elif (loadphase == 4):
 				# load geometry, each char is 2x2 tiles
-				line = line.strip('\n')
+				sline = line.strip('\n').split(',')
 				colnum = 0
-				botline = []
-				for char in line.strip('\n'):
-					if (char == '#'):
+				botline = [] # assumes all geometry sprites are exactly 2x2 -- one map tile
+
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						self.spriteindex_geo[linenum*2 * self.width + colnum] = spriteindex
+						# set geometry
 						self.geo.append(True)
 						self.geo.append(True)
 						botline.append(True)
 						botline.append(True)
-					else:
-						self.geo.append(False)
-						self.geo.append(False)
-						botline.append(False)
-						botline.append(False)
 
 					colnum += 2
+
 				for char in botline:
 					self.geo.append(char)
 
@@ -503,7 +525,8 @@ class HUD_Element:
 		self.width = 160
 		self.heightperfunc = 24
 
-		self.rectdim = (self.width+self.xoff, self.heightperfunc*len(self.functions)+self.yoff*2)
+		self.rectdim = (
+			self.width+self.xoff, self.heightperfunc*len(self.functions)+self.yoff*2)
 
 		y_offset = 0
 		for f in self.functions:
@@ -572,7 +595,7 @@ class HUD_Element:
 		self.geometry.set_spawn(*self.maptile)
 
 class SpriteSheet:
-	def __init__(self, name):
+	def __init__(self, data, name):
 		self.name = name
 
 		self.image = None
@@ -581,14 +604,23 @@ class SpriteSheet:
 		self.frameswide = 0
 		self.framestall = 0
 
-		self.loadsprite(name)
+		self.loadsprite(data, name)
 
 		# use this var to determine when to unload
 		self.numloadedmapsusing = 1
 
-	def loadsprite(self, name):
+	def loadsprite(self, data, name):
 		# parse the spritedata.json file in ./data
-		pass
+		datatype = data['datatype']
+
+		if (datatype == 'scene'):
+			self.image = pygame.image.load(data[name]['file'])
+			self.frameswide = data[name]['frameswide']
+			self.framestall = data[name]['framestall']
+
+	def get_image(self):
+		result = self.image
+		return result
 
 	'''
 	maybe more info required here to parse the json file that Aseprite exports
@@ -600,23 +632,40 @@ class SpriteBatch:
 		self.length = 0
 		self.sprites = []
 
+		fin = open('./data/scenespritedata.json')
+		self.scenespritedata = json.load(fin)
+		fin.close()
+
 	def add(self, spritename):
 		result = -1
 		for i in range(self.length):
-			if spritename == self.sprites[i]:
+			if spritename == self.sprites[i].name:
 				result = i
+				self.sprites[i].numloadedmapsusing += 1
 		if (result < 0):
 			# load the new sprite in
-			newspritesheet = SpriteSheet(spritename)
+			newspritesheet = SpriteSheet(self.scenespritedata, spritename)
 			self.sprites.append(newspritesheet)
-			result = length
+			result = self.length
 			self.length += 1
 
 		return result
 
 	def remove(self, spritename):
-		# check numloadedmapusing -- if zero, then unload
+		# check numloadedmapsusing -- if zero, then unload
 		pass
+
+	def draw(self, screen, spriteindex, rect, fliphorz=False):
+		image = self.sprites[spriteindex].get_image()
+		# scale image to the rect (already zoomed)
+		scale = (int(rect.width), int(rect.height))
+		image = pygame.transform.scale(image, scale)
+
+		if (fliphorz):
+			image = pygame.transform.flip(image, True, False)
+			screen.blit(image, rect.get_pyrect())
+		else:
+			screen.blit(image, rect.get_pyrect())
 
 def main(argv):
 	pygame.init()
@@ -629,6 +678,9 @@ def main(argv):
 
 	done = False
 	clock = pygame.time.Clock()
+
+	# cache structure for all sprite flyweights
+	spritebatch = SpriteBatch()
 
 	# input stuff
 	pygame.joystick.init()
@@ -647,7 +699,7 @@ def main(argv):
 	else:
 		mapname = input('map name: ')
 	geometry = MapData(mapname)
-	geometry.load()
+	geometry.load(spritebatch)
 
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
@@ -714,7 +766,7 @@ def main(argv):
 		if (pygame.K_LCTRL in curr_input and 
 			pygame.K_s in curr_input and 
 			pygame.K_s not in prev_input):
-			filename = geometry.save()
+			#filename = geometry.save() # disabling this while getting the sprite stuff working
 			print('%s saved.' % filename)
 
 		if (pygame.K_LCTRL in curr_input and 
@@ -726,7 +778,7 @@ def main(argv):
 			width = input('width: ')
 			height = input('height: ')
 			geometry = MapData(filename, (int(width), int(height)))
-			geometry.save()
+			#geometry.save()
 
 		# mouse input
 		screenmousepos = pygame.mouse.get_pos()
@@ -770,22 +822,40 @@ def main(argv):
 		# start drawing
 		screen.fill(grey)
 
-		# draw geometry
+		# draw background
+
+		# draw middle ground sprites
+		for j in range(geometry.height):
+			for i in range(geometry.width):
+				si = geometry.get_mgspriteindex(i ,j)
+
+		# draw geometry sprites
 		# TODO: only draw stuff that collides with camera rect
+		'''
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				if geometry.get_geo(i, j):
 					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
 					pygame.draw.rect(screen, lightgrey, 
 						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))	
+		'''
+		for j in range(geometry.height):
+			for i in range(geometry.width):
+				si = geometry.get_geospriteindex(i, j)
+				if (si >= 0):
+					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
+					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1))
+					spritebatch.draw(screen, si, rect)
+					#pygame.draw.rect(screen, lightgrey, rect.get_pyrect())	
 
 		# draw spawn location
 		spawnpos = geometry.spawn
 		pygame.draw.rect(screen, green, 
-			Rect(camera.game2screen(*geometry.get_tile2pos(spawnpos[0], spawnpos[1]-1, offset=False)),
+			Rect(camera.game2screen(
+				*geometry.get_tile2pos(spawnpos[0], spawnpos[1]-1, offset=False)),
 				(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
 			).get_pyrect(), 
-			2
+			3
 		)
 
 		# draw outline of selected/hover tile

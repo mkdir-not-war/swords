@@ -1,0 +1,9 @@
+{
+	"knight01" : {
+		"file" : "./res/actors/player/knight01.png",
+		"tileswide" : "2",
+		"tilestall" : "3",
+		"frameswide" : "1",
+		"framestall" : "1"
+	}
+}
