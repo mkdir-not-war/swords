@@ -101,7 +101,7 @@ class Rect:
 		return (topleft, topright, botleft, botright)
 
 	def get_pyrect(self):
-		result = pygame.Rect((self.x, self.y), (self.width, self.height))
+		result = pygame.Rect((int(self.x), int(self.y)), (int(self.width), int(self.height)))
 		return result
 
 	def contains_point(self, point):
@@ -209,8 +209,8 @@ class Camera:
 	def get_camerascreen(self, window):
 		result = window.subsurface(
 			pygame.Rect(
-				(self.x_offset, self.y_offset),
-				(self.width, self.height)
+				(int(self.x_offset), int(self.y_offset)),
+				(int(self.width), int(self.height))
 			)
 		)
 		return result
@@ -247,6 +247,7 @@ class MapData:
 
 		# Since tile = 2x2, these will both be at least 3/4th empty. 
 		# May need to optimize somehow
+		self.spriteindexset = [] # use for saving
 		self.spriteindex_geo = [-1] * (self.width * self.height)
 		self.spriteindex_mg = [-1] * (self.width * self.height)
 
@@ -380,10 +381,19 @@ class MapData:
 				name = line.strip('\n').split(',')[1]
 				index = spritebatch.add(name)
 				spriteindextranslator.append(index)
+				self.spriteindexset.append((name, index))
 
 			elif (loadphase == 3):
 				# load middleground, each char is 2x2 tiles
-				pass
+				sline = line.strip('\n').split(',')
+				colnum = 0
+
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						self.spriteindex_mg[linenum*2 * self.width + colnum] = spriteindex
+					colnum += 2
 
 			elif (loadphase == 4):
 				# load geometry, each char is 2x2 tiles
@@ -413,34 +423,64 @@ class MapData:
 		fin.close()
 		return spritebatch
 
-	def save(self):
+	def save(self, spritebatch):
 		fileoutput = []
+		spriteindextranslator = [None]
 
-		# first line: <width>,<height>
+		# map dimensions
 		fileoutput.append('%d,%d\n' % (self.width//2, self.height//2))
 		fileoutput.append('~\n')
 
-		# output sprite positions
+		# spawn location
+		fileoutput.append('%d,%d\n' % (self.spawn[0]//2, self.spawn[1]//2))
 		fileoutput.append('~\n')
 
-		# walls(#), spaces( ) or spawn(@)
+		# sprite indexs
+		for index in range(len(self.spriteindexset)):
+			name, si = self.spriteindexset[index]
+			fileoutput.append('%d,%s\n' % (index+1, name))
+		fileoutput.append('~\n')
+
+		# middleground sprite indexs
 		for j in range(self.height//2):
 			line = []
 			for i in range(self.width//2):
-				geo = self.get_geo(i*2, j*2)
-				if (geo):
-					line.append('#')
-				elif ((i*2, j*2+1) == self.spawn):
-					line.append('@')
+				si = self.spriteindex_mg[j*2 * self.width + i*2]
+				if (si >= 0):
+					name = spritebatch.sprites[si].name
+					mapindex = None
+					for index in range(len(self.spriteindexset)):
+						sname, si = self.spriteindexset[index]
+						if (name == sname):
+							mapindex = index+1
+					line.append('%d,' % mapindex)
 				else:
-					line.append(' ')
-			fileoutput.append(''.join(line) + '\n')
+					line.append('0,')
+			fileoutput.append(''.join(line).strip(',') + '\n')
+		fileoutput.append('~\n')
+
+		# geometry sprite indexs
+		for j in range(self.height//2):
+			line = []
+			for i in range(self.width//2):
+				si = self.spriteindex_geo[j*2 * self.width + i*2]
+				if (si >= 0):
+					name = spritebatch.sprites[si].name
+					mapindex = None
+					for index in range(len(self.spriteindexset)):
+						sname, si = self.spriteindexset[index]
+						if (name == sname):
+							mapindex = index+1
+					line.append('%d,' % mapindex)
+				else:
+					line.append('0,')
+			fileoutput.append(''.join(line).strip(',') + '\n')
 
 		# open file, write fileoutput to it
 		# strip the last '\n' from the fileoutput before writing
 		fileoutput[-1] = fileoutput[-1][:-1]
 		# write out file
-		filename = './data/%s.txt' % self.filename
+		filename = './data/maps/%s.txt' % self.filename
 		fout = open(filename, 'w')
 		for line in fileoutput:
 			fout.write(line)
@@ -766,7 +806,7 @@ def main(argv):
 		if (pygame.K_LCTRL in curr_input and 
 			pygame.K_s in curr_input and 
 			pygame.K_s not in prev_input):
-			#filename = geometry.save() # disabling this while getting the sprite stuff working
+			filename = geometry.save(spritebatch) 
 			print('%s saved.' % filename)
 
 		if (pygame.K_LCTRL in curr_input and 
@@ -827,18 +867,14 @@ def main(argv):
 		# draw middle ground sprites
 		for j in range(geometry.height):
 			for i in range(geometry.width):
-				si = geometry.get_mgspriteindex(i ,j)
+				si = geometry.get_mgspriteindex(i, j)
+				if (si >= 0):
+					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
+					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1))
+					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
 		# TODO: only draw stuff that collides with camera rect
-		'''
-		for j in range(geometry.height):
-			for i in range(geometry.width):
-				if geometry.get_geo(i, j):
-					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
-					pygame.draw.rect(screen, lightgrey, 
-						pygame.Rect(pos, (TILE_WIDTH*camera.zoom+1, TILE_WIDTH*camera.zoom+1)))	
-		'''
 		for j in range(geometry.height):
 			for i in range(geometry.width):
 				si = geometry.get_geospriteindex(i, j)
@@ -846,7 +882,6 @@ def main(argv):
 					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
 					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1))
 					spritebatch.draw(screen, si, rect)
-					#pygame.draw.rect(screen, lightgrey, rect.get_pyrect())	
 
 		# draw spawn location
 		spawnpos = geometry.spawn
