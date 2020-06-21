@@ -17,7 +17,7 @@ MOUSE_MID = 2
 MOUSE_RIGHT = 3
 
 # camera
-ZOOM_MULT = 2.0
+ZOOM_MULT = 3.0
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
 MOUSE_MOVE_BORDER_MULT = .8
@@ -170,7 +170,7 @@ class Camera:
 		self.y_offset = y_off
 
 		# gamepixels * zoom = screenpixels
-		self.zoom = self.width / CAMERA_WIDTH * ZOOM_MULT
+		self.zoom = int(self.width / CAMERA_WIDTH * ZOOM_MULT)
 
 		# game pos
 		self.pos = (
@@ -870,7 +870,7 @@ def main(argv):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
 					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
-					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1))
+					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom, TILE_WIDTH*2*camera.zoom))
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
@@ -880,7 +880,7 @@ def main(argv):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
 					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
-					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1))
+					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom, int(TILE_WIDTH*2*camera.zoom)))
 					spritebatch.draw(screen, si, rect)
 
 		# draw spawn location
@@ -888,7 +888,7 @@ def main(argv):
 		pygame.draw.rect(screen, green, 
 			Rect(camera.game2screen(
 				*geometry.get_tile2pos(spawnpos[0], spawnpos[1]-1, offset=False)),
-				(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
+				(TILE_WIDTH*2*camera.zoom, TILE_WIDTH*2*camera.zoom)
 			).get_pyrect(), 
 			3
 		)
@@ -902,7 +902,7 @@ def main(argv):
 				Rect(camera.game2screen(
 					mpos[0] - mpos[0]%(TILE_WIDTH*2), 
 					mpos[1] - mpos[1]%(TILE_WIDTH*2)),
-					(TILE_WIDTH*2*camera.zoom+1, TILE_WIDTH*2*camera.zoom+1)
+					(TILE_WIDTH*2*camera.zoom, TILE_WIDTH*2*camera.zoom)
 				).get_pyrect(), 
 				1
 			)

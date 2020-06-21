@@ -25,5 +25,10 @@
 		"file" : "./res/scene/geometry/dirt-grasstop.png",
 		"frameswide" : "1",
 		"framestall" : "1"
+	},
+	"MG_cave-wall" : {
+		"file" : "./res/scene/geometry/MG_cave-wall.png",
+		"frameswide" : "1",
+		"framestall" : "1"
 	}
 }
