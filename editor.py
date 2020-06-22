@@ -852,11 +852,13 @@ def main(argv):
 			if MOUSE_RIGHT in curr_input and not MOUSE_RIGHT in prev_input:
 				hudbox.activate(mouse_pos, mouse_maptile)
 
+		'''
 		elif (inputmode == InputMode.PAINT):
 			if MOUSE_LEFT in curr_input:
 				geometry.maptile_add(*mouse_maptile)
 			elif MOUSE_RIGHT in curr_input:
 				geometry.maptile_remove(*mouse_maptile)
+		'''
 				
 
 		# start drawing
