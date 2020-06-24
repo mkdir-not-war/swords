@@ -282,20 +282,36 @@ class MapData:
 
 	def set_geoon(self, x, y):
 		self.geo[x + self.width * y] = True
-
 	def set_geooff(self, x, y):
 		self.geo[x + self.width * y] = False
 
-	def maptile_add(self, mtx, mty):
+	def add_geosprite(self, spritename, spriteindex, position):
+		mtx, mty = position
 		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
 			x, y = mtx*2, mty*2
+			# confirm that we're not overwriting some existing geo sprite
+			assert(self.get_geospriteindex(x, y) == -1)
+
+			# add the geo sprite to the array
+			self.spriteindex_geo[x + self.width * y] = spriteindex
+			newindex = True
+			for name, index in self.spriteindexset:
+				if (index == spriteindex):
+					newindex = False
+					assert(name == spritename)
+					break
+			if (newindex):
+				self.spriteindexset.append((spritename, spriteindex))
+
+			# assume geo tiles are all 2x2
 			if (not self.get_geo(x, y)):
 				self.set_geoon(x, y)
 				self.set_geoon(x+1, y)
 				self.set_geoon(x, y+1)
 				self.set_geoon(x+1, y+1)
 
-	def maptile_remove(self, mtx, mty):
+	def maptile_remove(self, spritename, position):
+		mtx, mty = position
 		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
 			x, y = mtx*2, mty*2
 			if (self.get_geo(x, y)):
@@ -546,14 +562,16 @@ class HUD_Function:
 		self.highlighted = font_arial.render(name, True, (200, 0, 0))
 		self.yoff = 0
 		self.mousehover = False
+		self.visible = True # use this to hide "add geo" if there's already geo, etc
 
 class HUD_Element:
-	def __init__(self, geometry):
+	def __init__(self, geometry, spritebatch):
 		self.active = False
 		self.pos = None
 		self.maptile = None
 
 		self.geometry = geometry
+		self.spritebatch = spritebatch
 
 		self.functions = []
 		self.functions.append(HUD_Function('add geometry', self.add_geometry))
@@ -626,7 +644,20 @@ class HUD_Element:
 				)
 
 	def add_geometry(self):
-		self.geometry.maptile_add(*self.maptile)
+		print('adding geometry...\ncurrent spritebatch:')
+		# print out the spritebatch
+		self.spritebatch.print()
+		spritename = input('geo sprite (name or num): ')
+
+		index = -1
+		try:
+			index = int(spritename)
+		except:
+			index = self.spritebatch.add(spritename)
+
+		spritename = self.spritebatch.get(index).name
+
+		self.geometry.add_geosprite(spritename, index, self.maptile)
 
 	def remove_geometry(self):
 		self.geometry.maptile_remove(*self.maptile)
@@ -675,6 +706,19 @@ class SpriteBatch:
 		fin = open('./data/scenespritedata.json')
 		self.scenespritedata = json.load(fin)
 		fin.close()
+
+	def get(self, spriteindex):
+		if (spriteindex >= self.length):
+			return None
+		result = self.sprites[spriteindex]
+		return result
+
+	def print(self):
+		result = ''
+		for i in range(self.length):
+			spritename = self.sprites[i].name
+			result += '%d\t%s\n' % (i, spritename)
+		print(result)
 
 	def add(self, spritename):
 		result = -1
@@ -744,7 +788,7 @@ def main(argv):
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
 
-	hudbox = HUD_Element(geometry)
+	hudbox = HUD_Element(geometry, spritebatch)
 
 	inputmode = InputMode.NORMAL
 	paintmodefile = None
