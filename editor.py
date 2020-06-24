@@ -237,36 +237,48 @@ class Camera:
 		self.height = height
 
 class MapData:
-	def __init__(self, filename, dim=(0, 0)):
+	def __init__(self, filename=None):
 		self.filename = filename
 
-		self.width = dim[0]*2
-		self.height = dim[1]*2
+		self.width = 0
+		self.height = 0
 		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
 
 		# Since tile = 2x2, these will both be at least 3/4th empty. 
 		# May need to optimize somehow
-		self.spriteindexset = [] # use for saving
+		self.spriteindexset = [] # use for saving, [(name, index), ...]
 		self.spriteindex_geo = [-1] * (self.width * self.height)
 		self.spriteindex_mg = [-1] * (self.width * self.height)
 
-		#self.newmap()
+	def newmap(self, spritebatch):
+		self.filename = input('filename: ')
 
-	def newmap(self):
+		self.width = width = int(input('map width: '))*2
+		self.height = height = int(input('map height: '))*2
+
+		self.geo = [False] * (width * height)
+		self.spriteindex_geo = [-1] * (width * height)
+		self.spriteindex_mg = [-1] * (width * height)
+
+		self.spawn = (2, self.height-3)
+
+		# greybox collision border around the map
+		index = spritebatch.add('bluebox')
+		self.spriteindexset.append(('bluebox', index))
+
 		xs = [0, self.width//2-1]
 		ys = [0, self.height//2-1]
 
 		for j in range(self.height//2):
 			for i in range(self.width//2):
 				if (i in xs or j in ys):
-					x, y = i*2, j*2					
+					x, y = i*2, j*2
+					self.spriteindex_geo[x + self.width * y] = index
 					self.set_geoon(x, y)
 					self.set_geoon(x+1, y)
 					self.set_geoon(x, y+1)
 					self.set_geoon(x+1, y+1)
-
-		self.spawn = (2, self.height-3)
 
 	def get_geospriteindex(self, x, y):
 		result = self.spriteindex_geo[x + self.width * y]
@@ -285,8 +297,8 @@ class MapData:
 	def set_geooff(self, x, y):
 		self.geo[x + self.width * y] = False
 
-	def add_geosprite(self, spritename, spriteindex, position):
-		mtx, mty = position
+	def add_geosprite(self, spritename, spriteindex, mappos):
+		mtx, mty = mappos
 		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
 			x, y = mtx*2, mty*2
 			# confirm that we're not overwriting some existing geo sprite
@@ -643,21 +655,27 @@ class HUD_Element:
 					2
 				)
 
-	def add_geometry(self):
-		print('adding geometry...\ncurrent spritebatch:')
-		# print out the spritebatch
-		self.spritebatch.print()
-		spritename = input('geo sprite (name or num): ')
-
+	def add_geometry(self, paintindex=None, maptile=None):
 		index = -1
-		try:
-			index = int(spritename)
-		except:
-			index = self.spritebatch.add(spritename)
+		if (paintindex == None):
+			print('adding geometry...\ncurrent spritebatch:')
+			# print out the spritebatch
+			self.spritebatch.print()
+			spritename = input('geo sprite (name or num): ')
+			try:
+				index = int(spritename)
+			except:
+				index = self.spritebatch.add(spritename)
+		else:
+			index = paintindex
 
 		spritename = self.spritebatch.get(index).name
 
-		self.geometry.add_geosprite(spritename, index, self.maptile)
+		mt = maptile
+		if (maptile is None):
+			mt = self.maptile
+
+		self.geometry.add_geosprite(spritename, index, mt)
 
 	def remove_geometry(self):
 		self.geometry.maptile_remove(*self.maptile)
@@ -777,13 +795,16 @@ def main(argv):
 	inputdata = InputDataBuffer()
 
 	# Load in the test map
-	mapname = ''
+	mapname = None
+	geometry = None
 	if (len(argv) > 0):
 		mapname = argv[0]
+		geometry = MapData(mapname)
+		geometry.load(spritebatch)
 	else:
-		mapname = input('map name: ')
-	geometry = MapData(mapname)
-	geometry.load(spritebatch)
+		geometry = MapData()
+		geometry.newmap(spritebatch)
+	
 
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
@@ -791,7 +812,7 @@ def main(argv):
 	hudbox = HUD_Element(geometry, spritebatch)
 
 	inputmode = InputMode.NORMAL
-	paintmodefile = None
+	paintmodeindex = None
 
 	while not done:
 		clock.tick(FPS)
@@ -823,29 +844,36 @@ def main(argv):
 
 		# swap input modes
 		if (pygame.K_0 in curr_input and pygame.K_0 not in prev_input and 
-			inputmode==InputMode.PAINT):
+			inputmode!=InputMode.NORMAL):
 			inputmode = InputMode.NORMAL
 			print("switching to normal mode.")
+
 		elif pygame.K_1 in curr_input and pygame.K_1 not in prev_input:
+			spritename = ''
 			if (inputmode == InputMode.NORMAL):
 				inputmode = InputMode.PAINT
-				print("switching to paint mode.")
-				if (paintmodefile is None):
-					sobjfilename = askopenfilename().split("/")
-					if ('res' in sobjfilename):
-						# assumes only one "res" folder in the path
-						resindex = sobjfilename.index('res')
-						paintmodefile = './' + '/'.join(sobjfilename[resindex:])
-						print('paint object changed to %s' % paintmodefile)
-				else:
-					print("to switch objects, press 1 again.")
+				print("switching to geo paint mode.")
+				if (paintmodeindex is None):
+					print("current spritebatch:")
+					spritebatch.print()
+					spritename = input('geo sprite (name or num): ')
+					try:
+						index = int(spritename)
+					except:
+						index = spritebatch.add(spritename)
+					paintmodeindex = index
 			elif (inputmode == InputMode.PAINT):
-				sobjfilename = askopenfilename().split("/")
-				if ('res' in sobjfilename):
-					# assumes only one "res" folder in the path
-					resindex = sobjfilename.index('res') 
-					paintmodefile = './' + '/'.join(sobjfilename[resindex:])
-					print('paint object changed to %s' % paintmodefile)
+				print('switching geo sprite for painting.')
+				print("current spritebatch:")
+				spritebatch.print()
+				spritename = input('geo sprite (name or num): ')
+				try:
+					index = int(spritename)
+				except:
+					index = spritebatch.add(spritename)
+				paintmodeindex = index
+			print("current geo sprite is <%s>." % spritename)
+			print("to switch geo sprites, press 1 again.")
 
 		if (pygame.K_LCTRL in curr_input and 
 			pygame.K_s in curr_input and 
@@ -896,13 +924,21 @@ def main(argv):
 			if MOUSE_RIGHT in curr_input and not MOUSE_RIGHT in prev_input:
 				hudbox.activate(mouse_pos, mouse_maptile)
 
-		'''
 		elif (inputmode == InputMode.PAINT):
 			if MOUSE_LEFT in curr_input:
-				geometry.maptile_add(*mouse_maptile)
+				if (geometry.get_geospriteindex(mouse_maptile[0]*2, mouse_maptile[1]*2) == -1):
+					hudbox.add_geometry(paintmodeindex, mouse_maptile)
+			'''
 			elif MOUSE_RIGHT in curr_input:
 				geometry.maptile_remove(*mouse_maptile)
-		'''
+			'''
+
+			if MOUSE_MID in curr_input:
+				if (not camera.get_mousemoverect().contains_point(screenmousepos)):
+					center = camera.get_center()
+					delta = (screenmousepos[0]-center[0], screenmousepos[1]-center[1])
+					delta = tuple_mult(normalize(delta), MOUSE_MOVE_SPEED_MULT)
+					camera.update_pos(v2_add(camera.pos, delta))
 				
 
 		# start drawing
