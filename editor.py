@@ -206,6 +206,12 @@ class Camera:
 
 		return result
 
+	def gamerect2screen(self, rect):
+		result = Rect(
+			self.game2screen(rect.x, rect.y),
+			tuple_mult((rect.width, rect.height), self.zoom))
+		return result
+
 	def get_camerascreen(self, window):
 		result = window.subsurface(
 			pygame.Rect(
@@ -429,6 +435,11 @@ class MapData:
 						self.geo.append(True)
 						botline.append(True)
 						botline.append(True)
+					else:
+						self.geo.append(False)
+						self.geo.append(False)
+						botline.append(False)
+						botline.append(False)
 
 					colnum += 2
 
@@ -948,8 +959,11 @@ def main(argv):
 			for i in range(geometry.width):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
-					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
-					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom, TILE_WIDTH*2*camera.zoom))
+					rect = Rect(
+						geometry.get_tile2pos(i, j, offset=False), 
+						(TILE_WIDTH*2, TILE_WIDTH*2)
+					)
+					rect = camera.gamerect2screen(rect)
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
@@ -958,8 +972,11 @@ def main(argv):
 			for i in range(geometry.width):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
-					pos = camera.game2screen(*geometry.get_tile2pos(i, j, offset=False))
-					rect = Rect(pos, (TILE_WIDTH*2*camera.zoom, int(TILE_WIDTH*2*camera.zoom)))
+					rect = Rect(
+						geometry.get_tile2pos(i, j, offset=False), 
+						(TILE_WIDTH*2, TILE_WIDTH*2)
+					)
+					rect = camera.gamerect2screen(rect)
 					spritebatch.draw(screen, si, rect)
 
 		# draw spawn location

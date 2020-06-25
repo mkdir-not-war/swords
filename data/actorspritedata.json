@@ -1,4 +1,7 @@
 {
+	"datatype" : "actor",
+	
+
 	"knight01" : {
 		"file" : "./res/actors/player/knight01.png",
 		"tileswide" : "2",

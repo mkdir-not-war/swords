@@ -1,11 +1,19 @@
 import pygame
 from math import sqrt
 from enum import IntEnum
+import json
 
 #constants
 TILE_WIDTH = 16
 FPS = 60
 MAXINPUTQUEUELEN = 10
+
+# camera
+ZOOM_MULT = 3.0
+CAMERA_WIDTH = 1050
+CAMERA_HEIGHT = 750
+MOUSE_MOVE_BORDER_MULT = .8
+MOUSE_MOVE_SPEED_MULT = 1.7
 
 # physics
 HORZ_FRIC = 0.00975 #0.156/16 @ 30 FPS
@@ -26,10 +34,9 @@ COYOTE_FRAMES = 5
 EARLYJUMP_FRAMES = 8
 
 # magic
-E_NEUTRAL = 0
-E_WATER = 1
-E_FIRE = 2
-E_WIND = 3
+E_WATER =0
+E_FIRE = 1
+E_WIND = 2
 
 # debug tiles
 highlight = []
@@ -83,6 +90,9 @@ class Rect:
 		result = Rect((self.x, self.y), (self.width, self.height))
 		return result
 
+	def print(self):
+		print((self.x, self.y), (self.width, self.height))
+
 	def move(self, dp):
 		self.x += dp[0]
 		self.y += dp[1]
@@ -108,7 +118,7 @@ class Rect:
 		return (topleft, topright, botleft, botright)
 
 	def get_pyrect(self):
-		result = pygame.Rect((self.x, self.y), (self.width, self.height))
+		result = pygame.Rect((int(self.x), int(self.y)), (int(self.width), int(self.height)))
 		return result
 
 	def contains_point(self, point):
@@ -144,14 +154,129 @@ lightblue = pygame.Color(100, 100, 250)
 red = pygame.Color('red')
 black = pygame.Color('black')
 
-spell_elements = [E_NEUTRAL, E_WATER, E_FIRE, E_WIND]
+spell_elements = [E_WATER, E_FIRE, E_WIND]
+
+ASPECT_RATIO_YX = 1.4
+
+class Camera:
+	def __init__(self, pos, screendim):
+
+		width = 0
+		height = 0
+		x_off = 0
+		y_off = 0
+
+		ywidth = screendim[1]*ASPECT_RATIO_YX
+
+		if (ywidth > screendim[0]):
+			width = screendim[0]
+			height = width//ASPECT_RATIO_YX
+			y_off = (screendim[1] - height)//2
+		else:
+			height = screendim[1]
+			width = height*ASPECT_RATIO_YX
+			x_off = (screendim[0] - width)//2
+
+		# screen pixels
+		self.width = width
+		self.height = height
+
+		self.x_offset = x_off
+		self.y_offset = y_off
+
+		# gamepixels * zoom = screenpixels
+		self.zoom = int(self.width / CAMERA_WIDTH * ZOOM_MULT)
+
+		# game pos
+		self.pos = (
+			pos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
+			pos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
+
+	def update_pos(self, newpos):
+		self.pos = newpos
+
+	def get_center(self):
+		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
+		return result
+
+	def game2screen(self, x, y):
+		xpos = x - self.pos[0]
+		ypos = y - self.pos[1]
+
+		result = (
+			xpos * self.zoom,
+			ypos * self.zoom
+		)
+
+		return result
+
+	def screen2cam(self, x, y):
+		xpos = (x - self.x_offset) // self.zoom
+		ypos = (y - self.y_offset) // self.zoom
+
+		result = (
+			xpos + self.pos[0],
+			ypos + self.pos[1]
+		)
+
+		return result
+
+	def get_screenrect(self, rect):
+		result = Rect(
+			self.game2screen(rect.x, rect.y),
+			tuple_mult((rect.width, rect.height), self.zoom))
+		return result
+
+	def get_camerascreen(self, window):
+		result = window.subsurface(
+			pygame.Rect(
+				(int(self.x_offset), int(self.y_offset)),
+				(int(self.width), int(self.height))
+			)
+		)
+		return result
+
+	def get_mousemoverect(self):
+		borderdistx = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.width
+		borderdisty = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.height
+		result = Rect(
+			(self.x_offset + borderdistx, self.y_offset + borderdisty),
+			(self.width * MOUSE_MOVE_BORDER_MULT, self.height * MOUSE_MOVE_BORDER_MULT)
+		)
+		return result
+
+	def update_window(self):
+		surface = pygame.display.get_surface()
+		x, y = size = surface.get_width(), surface.get_height()
+		if (x < y):
+			width = x
+			height = width*ASPECT_RATIO_XY
+		else:
+			height = y
+			width = height//ASPECT_RATIO_XY
+		self.width = width
+		self.height = height
 
 class MapData:
-	def __init__(self, dim=(0, 0)):
-		self.width = dim[0]
-		self.height = dim[1]
-		self.geo = [] # start in top left
+	def __init__(self):
+		self.width = 0
+		self.height = 0
+		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
+
+		# Since tile = 2x2, these will both be at least 3/4th empty. 
+		# May need to optimize somehow
+		self.spriteindexset = [] # use for saving, [(name, index), ...]
+		self.spriteindex_geo = [-1] * (self.width * self.height)
+		self.spriteindex_mg = [-1] * (self.width * self.height)
+
+	def get_geospriteindex(self, x, y):
+		result = self.spriteindex_geo[x + self.width * y]
+		return result
+
+	def get_mgspriteindex(self, x, y):
+		result = self.spriteindex_mg[x + self.width * y]
+		return result
 
 	def get_geo(self, x, y):
 		result = self.geo[x + self.width * y]
@@ -193,39 +318,84 @@ class MapData:
 		result = self.get_tile2pos(*location, offset=False)
 		return result
 
-	def load(self, filename):
-		fin = open('./data/%s.txt' % filename)
+	def load(self, filename, spritebatch):
+		self.filename = filename
+		fin = open('./data/maps/%s.txt' % filename)
+
+		loadphase = 0
+		spriteindextranslator = [None]
+
 		linenum = 0
 		for line in fin:
-			if (linenum == 0):
-				spline = line.split(',')
-				self.width = int(spline[0])*2
-				self.height = int(spline[1])*2
-			else:
-				# load geometry, each char is 2x2 tiles
-				line = line.strip('\n')
-				colnum = 0
-				botline = []
-				for char in line.strip('\n'):
-					if (char == '#'):
-						self.geo.append(True)
-						self.geo.append(True)
-						botline.append(True)
-						botline.append(True)
-					else:
-						self.geo.append(False)
-						self.geo.append(False)
-						botline.append(False)
-						botline.append(False)
+			if (line == '~\n'):
+				linenum = 0
+				loadphase += 1
+				continue
 
-					if (char == '@'):
-						# +1 on y pos to push the pos to bottom left of tile
-						self.spawn = (colnum, (linenum-1)*2+1)
+			if (loadphase == 0):
+				# map size
+				width, height = line.strip('\n').split(',')
+				width = int(width) * 2
+				height = int(height) * 2
+
+				self.width = width
+				self.height = height
+
+				self.geo = [False] * (width * height)
+				self.spriteindex_geo = [-1] * (width * height)
+				self.spriteindex_mg = [-1] * (width * height)
+			elif (loadphase == 1):
+				# load spawn position
+				spline = line.strip('\n').split(',')
+				# +1 on y pos to push the pos to bottom left of tile
+				self.spawn = (int(spline[0])*2, int(spline[1])*2 + 1)
+			elif (loadphase == 2):
+				# load sprites
+				name = line.strip('\n').split(',')[1]
+				index = spritebatch.add(name, 'scene')
+				spriteindextranslator.append(index)
+				self.spriteindexset.append((name, index))
+
+			elif (loadphase == 3):
+				# load middleground, each char is 2x2 tiles
+				sline = line.strip('\n').split(',')
+				colnum = 0
+
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						self.spriteindex_mg[linenum*2 * self.width + colnum] = spriteindex
+					colnum += 2
+
+			elif (loadphase == 4):
+				# load geometry, each char is 2x2 tiles
+				sline = line.strip('\n').split(',')
+				colnum = 0
+				botline = [] # assumes all geometry sprites are exactly 2x2 -- one map tile
+
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						self.spriteindex_geo[linenum*2 * self.width + colnum] = spriteindex
+						# set geometry
+						self.geo[linenum * 2 * self.width + colnum] = True
+						self.geo[linenum * 2 * self.width + colnum + 1] = True
+						self.geo[(linenum * 2 + 1) * self.width + colnum] = True
+						self.geo[(linenum * 2 + 1) * self.width + colnum + 1] = True
+					else:
+						self.geo[linenum * 2 * self.width + colnum] = False
+						self.geo[linenum * 2 * self.width + colnum + 1] = False
+						self.geo[(linenum * 2 + 1) * self.width + colnum] = False
+						self.geo[(linenum * 2 + 1) * self.width + colnum + 1] = False
 
 					colnum += 2
-				for char in botline:
-					self.geo.append(char)
+			
 			linenum += 1
+				
+		fin.close()
+		return spritebatch
 
 def update_physicsbodies(physicsbodies, geometry):
 	# get all new rects by moving them and reconciling with collisions
@@ -449,7 +619,10 @@ class PhysicsBody:
 		return result
 
 class Player:
-	def __init__(self):
+	def __init__(self, spritebatch):
+		# draw stuff
+		self.spriteindex = spritebatch.add('knight01', 'actor')
+
 		# physics stuff
 		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=3)
 		self.jumps_remaining = 0
@@ -623,67 +796,136 @@ class InputDataBuffer:
 		return result
 
 class SpriteSheet:
-	def __init__(self, image, fw, fh):
-		self.image = image
-		self.frameswidth = fw
-		self.frameheight = fh
+	def __init__(self, data, name):
+		self.name = name
+
+		self.image = None
+		self.tileswide = 0
+		self.tilestall = 0
+		self.frameswide = 0
+		self.framestall = 0
+
+		self.loadsprite(data, name)
+
+		# use this var to determine when to unload
+		self.numloadedmapsusing = 1
+
+	def loadsprite(self, data, name):
+		# parse the spritedata.json file in ./data
+		datatype = data['datatype']
+
+		if (datatype == 'scene'):
+			self.image = pygame.image.load(data[name]['file'])
+			self.frameswide = data[name]['frameswide']
+			self.framestall = data[name]['framestall']
+		elif (datatype == 'actor'):
+			self.image = pygame.image.load(data[name]['file'])
+			self.tileswide = data[name]['tileswide']
+			self.tilestall = data[name]['tilestall']
+			self.frameswide = data[name]['frameswide']
+			self.framestall = data[name]['framestall']
+
+	def get_image(self):
+		result = self.image
+		return result
 
 	'''
 	maybe more info required here to parse the json file that Aseprite exports
 	'''
 
+# one spritebatch for animated sprites, one for not (i.e. geometry)
 class SpriteBatch:
 	def __init__(self):
 		self.length = 0
 		self.sprites = []
-	'''
-	entities save the index into the spritebatch that their spritesheet is
-	e.g. RaceCar.png is at index 2, so all racecars have spriteIndex=2
-	'''
 
-	'''
-	dynamic loading? When you approach a scroll, load in the pngs to the spritebatch?
-	or maybe a smarter caching solution
-	vvv
-	eventually the map editor should grab all the spawns on the map and make a json
-	file that has all the filenames, framewidths and frameheights for the necessary
-	spritesheets of that map
-	'''
+		fin = open('./data/scenespritedata.json')
+		self.scenespritedata = json.load(fin)
+		fin.close()
 
-	'''
-	retrieve frames from spritesheets for actual drawing. 
-	'''
-	def get_sprite(self, index, framerow=0, framecol=0):
-		assert(index < self.length and index >= 0)
+		fin = open('./data/actorspritedata.json')
+		self.actorspritedata = json.load(fin)
+		fin.close()
+
+	def get(self, spriteindex):
+		if (spriteindex >= self.length):
+			return None
+		result = self.sprites[spriteindex]
+		return result
+
+	def print(self):
+		result = ''
+		for i in range(self.length):
+			spritename = self.sprites[i].name
+			result += '%d\t%s\n' % (i, spritename)
+		print(result)
+
+	def add(self, spritename, datatype):
+		result = -1
+		for i in range(self.length):
+			if spritename == self.sprites[i].name:
+				result = i
+				self.sprites[i].numloadedmapsusing += 1
+		if (result < 0):
+			# load the new sprite in
+			if (datatype == 'actor'):
+				newspritesheet = SpriteSheet(self.actorspritedata, spritename)
+			elif (datatype == 'scene'):
+				newspritesheet = SpriteSheet(self.scenespritedata, spritename)
+			self.sprites.append(newspritesheet)
+			result = self.length
+			self.length += 1
+
+		return result
+
+	def remove(self, spritename):
+		# check numloadedmapsusing -- if zero, then unload
+		pass
+
+	def draw(self, screen, spriteindex, rect, fliphorz=False):
+		image = self.sprites[spriteindex].get_image()
+		# scale image to the rect (already zoomed)
+		scale = (int(rect.width), int(rect.height))
+		image = pygame.transform.scale(image, scale)
+
+		if (fliphorz):
+			image = pygame.transform.flip(image, True, False)
+			screen.blit(image, rect.get_pyrect())
+		else:
+			screen.blit(image, rect.get_pyrect())
 
 
 def main():
 	pygame.init()
 
 	# Set the width and height of the screen (width, height).
-	screendim = (1050, 750)
-	midscreen = (screendim[0]//2, screendim[1]//2)
-	screen = pygame.display.set_mode(screendim)
+	screendim = (800, 600)
+	window = pygame.display.set_mode(screendim)
 	pygame.display.set_caption("swords")
 
 	done = False
 	clock = pygame.time.Clock()
 
+	# cache structure for all sprite flyweights
+	spritebatch = SpriteBatch()
+
 	# input stuff
 	pygame.joystick.init()
 
 	# player stuff
-	player = Player()
+	player = Player(spritebatch)
 
 	# input stuff
 	prev_input = []
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
 
+	# DEBUGGING
+	filename = 'smallmap'
 
 	# Load in the test map
 	geometry = MapData()
-	geometry.load('map3')
+	geometry.load(filename, spritebatch)
 	player.set_pos(geometry.get_spawn(player.physicsbody))
 
 	# physics
@@ -691,7 +933,7 @@ def main():
 
 
 	# load images
-	playerimg = pygame.image.load('./res/entities/player/knight01.png')
+	playerimg = pygame.image.load('./res/actors/player/knight01.png')
 
 	# load fonts
 	''' sample font code, but pretty pygame specific.
@@ -704,6 +946,8 @@ def main():
 	Probably going to be setting up some memory constructs around here
 	'''
 
+	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
+	screen = camera.get_camerascreen(window)
 
 	while not done:
 		clock.tick(FPS)
@@ -770,30 +1014,43 @@ def main():
 			if (not line is None):
 				print(line)
 
-		#pygame.draw.circle(screen, lightgrey, (i, j), 1, 1)
+		# draw background
 
+		# draw middle ground sprites
 		for j in range(geometry.height):
 			for i in range(geometry.width):
-				if geometry.get_geo(i, j):
-					pos = geometry.get_tile2pos(i, j, offset=False)
-					pygame.draw.rect(screen, lightgrey, 
-						pygame.Rect(pos, (TILE_WIDTH, TILE_WIDTH)))		
+				si = geometry.get_mgspriteindex(i, j)
+				if (si >= 0):
+					rect = Rect(
+						geometry.get_tile2pos(i, j, offset=False), 
+						(TILE_WIDTH*2, TILE_WIDTH*2)
+					)
+					rect = camera.get_screenrect(rect)
+					spritebatch.draw(screen, si, rect)
+
+		# draw geometry sprites
+		# TODO: only draw stuff that collides with camera rect
+		for j in range(geometry.height):
+			for i in range(geometry.width):
+				si = geometry.get_geospriteindex(i, j)
+				if (si >= 0):
+					rect = Rect(
+						geometry.get_tile2pos(i, j, offset=False), 
+						(TILE_WIDTH*2, TILE_WIDTH*2)
+					)
+					rect = camera.get_screenrect(rect)
+					spritebatch.draw(screen, si, rect)
 
 		# draw player
-		'''
-		pygame.draw.rect(screen, lightblue, 
-			player.physicsbody.rect.get_pyrect())
-		'''
-		if (player.facing_direction > 0):
-			screen.blit(playerimg, player.physicsbody.rect.get_pyrect())
-		else:
-			screen.blit(
-				pygame.transform.flip(playerimg, True, False), 
-				player.physicsbody.rect.get_pyrect()
-			)
-			
+		playerpos = player.physicsbody.get_pos()
+		playerrect = Rect(playerpos, player.physicsbody.get_dim())
+		playerrect = camera.get_screenrect(playerrect)
+		spritebatch.draw(
+			screen, player.spriteindex, playerrect, fliphorz=(player.facing_direction <= 0))
+		
 
 		# highlight tiles for debug
+		# TODO: fix this to align to cameras
 		DEBUG = False
 		if (DEBUG):
 			colorlines = {}
@@ -802,13 +1059,28 @@ def main():
 				if not color in colorlines:
 					colorlines[color] = ci
 					ci += 1
-				pygame.draw.rect(screen, pygame.Color(color), 
+				rect = camera.get_screenrect(
 					Rect(
 						(tile.x+ci, tile.y+ci),
 						(tile.width-ci*2, tile.height-ci*2)
-					).get_pyrect(), 
-					1
+					)
 				)
+				pygame.draw.rect(screen, pygame.Color(color), rect.get_pyrect(), 1)
+
+
+		# draw all geo
+		'''
+		for j in range(geometry.height):
+			for i in range(geometry.width):
+				if (geometry.get_geo(i, j)):
+					rect = camera.get_screenrect(
+						Rect(
+							geometry.get_tile2pos(i, j, offset=False),
+							(TILE_WIDTH, TILE_WIDTH)
+						)
+					)
+					pygame.draw.rect(screen, black, rect.get_pyrect(), 1)
+		'''
 		
 
 		pygame.display.flip()
