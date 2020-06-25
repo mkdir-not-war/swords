@@ -9,7 +9,7 @@ FPS = 60
 MAXINPUTQUEUELEN = 10
 
 # camera
-ZOOM_MULT = 3.0
+ZOOM_MULT = 2.2
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
 MOUSE_MOVE_BORDER_MULT = .8
@@ -185,15 +185,19 @@ class Camera:
 		self.y_offset = y_off
 
 		# gamepixels * zoom = screenpixels
-		self.zoom = int(self.width / CAMERA_WIDTH * ZOOM_MULT)
+		self.zoom = self.width / CAMERA_WIDTH * ZOOM_MULT
 
 		# game pos
 		self.pos = (
 			pos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
 			pos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
 
-	def update_pos(self, newpos):
-		self.pos = newpos
+	def update_pos(self, player):
+		# TODO: do this smarter
+		newpos = player.physicsbody.get_pos()
+		self.pos = (
+			newpos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
+			newpos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
 
 	def get_center(self):
 		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
@@ -204,15 +208,15 @@ class Camera:
 		ypos = y - self.pos[1]
 
 		result = (
-			xpos * self.zoom,
-			ypos * self.zoom
+			int(xpos * self.zoom + 0.5),
+			int(ypos * self.zoom + 0.5)
 		)
 
 		return result
 
 	def screen2cam(self, x, y):
-		xpos = (x - self.x_offset) // self.zoom
-		ypos = (y - self.y_offset) // self.zoom
+		xpos = int((x - self.x_offset) // self.zoom + 0.5)
+		ypos = int((y - self.y_offset) // self.zoom + 0.5)
 
 		result = (
 			xpos + self.pos[0],
@@ -224,7 +228,11 @@ class Camera:
 	def get_screenrect(self, rect):
 		result = Rect(
 			self.game2screen(rect.x, rect.y),
-			tuple_mult((rect.width, rect.height), self.zoom))
+			(
+				int(rect.width * self.zoom + 0.5), 
+				int(rect.height * self.zoom + 0.5)
+			)
+		)
 		return result
 
 	def get_camerascreen(self, window):
@@ -236,6 +244,17 @@ class Camera:
 		)
 		return result
 
+	def get_maptilebounds(self, geometry):
+		mtx, mty = geometry.get_pos2tile(*self.pos)
+
+		width = self.width // TILE_WIDTH
+		height = self.height // TILE_WIDTH
+
+		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
+
+		return result
+
+	'''
 	def get_mousemoverect(self):
 		borderdistx = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.width
 		borderdisty = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.height
@@ -244,6 +263,7 @@ class Camera:
 			(self.width * MOUSE_MOVE_BORDER_MULT, self.height * MOUSE_MOVE_BORDER_MULT)
 		)
 		return result
+	'''
 
 	def update_window(self):
 		surface = pygame.display.get_surface()
@@ -921,7 +941,7 @@ def main():
 	inputdata = InputDataBuffer()
 
 	# DEBUGGING
-	filename = 'smallmap'
+	filename = 'first-dungeon'
 
 	# Load in the test map
 	geometry = MapData()
@@ -1007,6 +1027,8 @@ def main():
 
 		update_physicsbodies(physicsbodies, geometry)
 
+		camera.update_pos(player)
+
 		# start drawing
 		screen.fill(grey)
 
@@ -1014,11 +1036,14 @@ def main():
 			if (not line is None):
 				print(line)
 
+		# get camera maptile range
+		camerabounds = camera.get_maptilebounds(geometry)
+
 		# draw background
 
 		# draw middle ground sprites
-		for j in range(geometry.height):
-			for i in range(geometry.width):
+		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
+			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
@@ -1029,9 +1054,8 @@ def main():
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
-		# TODO: only draw stuff that collides with camera rect
-		for j in range(geometry.height):
-			for i in range(geometry.width):
+		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
+			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(

@@ -221,6 +221,16 @@ class Camera:
 		)
 		return result
 
+	def get_maptilebounds(self, geometry):
+		mtx, mty = geometry.get_pos2tile(self.pos)
+
+		width = self.width // TILE_WIDTH
+		height = self.height // TILE_WIDTH
+
+		result = Rect((mtx, mty), (width, height))
+
+		return result
+
 	def get_mousemoverect(self):
 		borderdistx = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.width
 		borderdisty = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.height
@@ -950,12 +960,17 @@ def main(argv):
 				
 
 		# start drawing
-		screen.fill(grey)
+		screen.fill(grey) # TODO: change this to off-black??
+
+		# get camera maptile range
+		camerabounds = camera.get_maptilebounds(geometry)
+		print(camerabounds.x, camerabounds.x + camerabounds.width)
+		input()
 
 		# draw background
 
 		# draw middle ground sprites
-		for j in range(geometry.height):
+		for j in range(camerabounds.y, camerabounds.y + camerabounds.height):
 			for i in range(geometry.width):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
@@ -967,8 +982,7 @@ def main(argv):
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
-		# TODO: only draw stuff that collides with camera rect
-		for j in range(geometry.height):
+		for j in range(camerabounds.y, camerabounds.y + camerabounds.height):
 			for i in range(geometry.width):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
