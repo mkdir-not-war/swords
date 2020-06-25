@@ -251,13 +251,15 @@ class MapData:
 		self.spriteindex_geo = [-1] * (self.width * self.height)
 		self.spriteindex_mg = [-1] * (self.width * self.height)
 
+	'''
+	doesn't fuck with self.geo because it doesn't matter for the editor
+	'''
 	def newmap(self, spritebatch):
 		self.filename = input('filename: ')
 
 		self.width = width = int(input('map width: '))*2
 		self.height = height = int(input('map height: '))*2
 
-		self.geo = [False] * (width * height)
 		self.spriteindex_geo = [-1] * (width * height)
 		self.spriteindex_mg = [-1] * (width * height)
 
@@ -275,10 +277,6 @@ class MapData:
 				if (i in xs or j in ys):
 					x, y = i*2, j*2
 					self.spriteindex_geo[x + self.width * y] = index
-					self.set_geoon(x, y)
-					self.set_geoon(x+1, y)
-					self.set_geoon(x, y+1)
-					self.set_geoon(x+1, y+1)
 
 	def get_geospriteindex(self, x, y):
 		result = self.spriteindex_geo[x + self.width * y]
@@ -292,11 +290,9 @@ class MapData:
 		result = self.geo[x + self.width * y]
 		return result
 
-	def set_geoon(self, x, y):
-		self.geo[x + self.width * y] = True
-	def set_geooff(self, x, y):
-		self.geo[x + self.width * y] = False
-
+	'''
+	doesn't fuck with self.geo because it doesn't matter for the editor
+	'''
 	def add_geosprite(self, spritename, spriteindex, mappos):
 		mtx, mty = mappos
 		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
@@ -315,22 +311,16 @@ class MapData:
 			if (newindex):
 				self.spriteindexset.append((spritename, spriteindex))
 
-			# assume geo tiles are all 2x2
-			if (not self.get_geo(x, y)):
-				self.set_geoon(x, y)
-				self.set_geoon(x+1, y)
-				self.set_geoon(x, y+1)
-				self.set_geoon(x+1, y+1)
-
-	def maptile_remove(self, spritename, position):
-		mtx, mty = position
+	'''
+	doesn't fuck with self.geo because it doesn't matter for the editor
+	'''
+	def remove_geosprite(self, mappos):
+		mtx, mty = mappos
 		if (mtx > 0 and mtx < self.width//2-1 and mty > 0 and mty < self.height//2-1):
 			x, y = mtx*2, mty*2
-			if (self.get_geo(x, y)):
-				self.set_geooff(x, y)
-				self.set_geooff(x+1, y)
-				self.set_geooff(x, y+1)
-				self.set_geooff(x+1, y+1)
+
+			# remove the geo sprite from the array
+			self.spriteindex_geo[x + self.width * y] = -1
 
 	def get_pos2tile(self, x, y):
 		result = (int(x//TILE_WIDTH), int(y//TILE_WIDTH))
@@ -451,6 +441,9 @@ class MapData:
 		fin.close()
 		return spritebatch
 
+	'''
+	loading infers collision geometry from sprite locations, doesn't actually save it
+	'''
 	def save(self, spritebatch):
 		fileoutput = []
 		spriteindextranslator = [None]
@@ -677,8 +670,12 @@ class HUD_Element:
 
 		self.geometry.add_geosprite(spritename, index, mt)
 
-	def remove_geometry(self):
-		self.geometry.maptile_remove(*self.maptile)
+	def remove_geometry(self, maptile=None):
+		mt = maptile
+		if (maptile is None):
+			mt = self.maptile
+
+		self.geometry.remove_geosprite(mt)
 
 	def set_spawn(self):
 		self.geometry.set_spawn(*self.maptile)
@@ -928,10 +925,10 @@ def main(argv):
 			if MOUSE_LEFT in curr_input:
 				if (geometry.get_geospriteindex(mouse_maptile[0]*2, mouse_maptile[1]*2) == -1):
 					hudbox.add_geometry(paintmodeindex, mouse_maptile)
-			'''
+			
 			elif MOUSE_RIGHT in curr_input:
-				geometry.maptile_remove(*mouse_maptile)
-			'''
+				if (geometry.get_geospriteindex(mouse_maptile[0]*2, mouse_maptile[1]*2) > -1):
+					hudbox.remove_geometry(mouse_maptile)
 
 			if MOUSE_MID in curr_input:
 				if (not camera.get_mousemoverect().contains_point(screenmousepos)):
