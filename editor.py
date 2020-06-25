@@ -21,7 +21,7 @@ ZOOM_MULT = 3.0
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
 MOUSE_MOVE_BORDER_MULT = .8
-MOUSE_MOVE_SPEED_MULT = 1.7
+MOUSE_MOVE_SPEED_MULT = 1.9
 
 def sign(n):
 	if (n < 0):
@@ -206,6 +206,16 @@ class Camera:
 
 		return result
 
+	def get_screenrect(self, rect):
+		result = Rect(
+			self.game2screen(rect.x, rect.y),
+			(
+				int(rect.width * self.zoom + 0.5), 
+				int(rect.height * self.zoom + 0.5)
+			)
+		)
+		return result
+
 	def gamerect2screen(self, rect):
 		result = Rect(
 			self.game2screen(rect.x, rect.y),
@@ -222,12 +232,12 @@ class Camera:
 		return result
 
 	def get_maptilebounds(self, geometry):
-		mtx, mty = geometry.get_pos2tile(self.pos)
+		mtx, mty = geometry.get_pos2tile(*self.pos)
 
-		width = self.width // TILE_WIDTH
-		height = self.height // TILE_WIDTH
+		width = self.width // (TILE_WIDTH*2/self.zoom)
+		height = self.height // (TILE_WIDTH*2/self.zoom)
 
-		result = Rect((mtx, mty), (width, height))
+		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
 
 		return result
 
@@ -964,33 +974,31 @@ def main(argv):
 
 		# get camera maptile range
 		camerabounds = camera.get_maptilebounds(geometry)
-		print(camerabounds.x, camerabounds.x + camerabounds.width)
-		input()
 
 		# draw background
 
 		# draw middle ground sprites
-		for j in range(camerabounds.y, camerabounds.y + camerabounds.height):
-			for i in range(geometry.width):
+		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
+			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
 						geometry.get_tile2pos(i, j, offset=False), 
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
-					rect = camera.gamerect2screen(rect)
+					rect = camera.get_screenrect(rect)
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
-		for j in range(camerabounds.y, camerabounds.y + camerabounds.height):
-			for i in range(geometry.width):
+		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
+			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
 						geometry.get_tile2pos(i, j, offset=False), 
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
-					rect = camera.gamerect2screen(rect)
+					rect = camera.get_screenrect(rect)
 					spritebatch.draw(screen, si, rect)
 
 		# draw spawn location
