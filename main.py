@@ -195,9 +195,10 @@ class Camera:
 	def update_pos(self, player):
 		# TODO: do this smarter
 		newpos = player.physicsbody.get_pos()
+		pwidth, pheight = player.physicsbody.get_dim()
 		self.pos = (
-			newpos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
-			newpos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
+			newpos[0] - CAMERA_WIDTH/2/ZOOM_MULT + pwidth//2, 
+			newpos[1] - CAMERA_HEIGHT/2/ZOOM_MULT + pheight//2)
 
 	def get_center(self):
 		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
@@ -247,8 +248,8 @@ class Camera:
 	def get_maptilebounds(self, geometry):
 		mtx, mty = geometry.get_pos2tile(*self.pos)
 
-		width = self.width // TILE_WIDTH
-		height = self.height // TILE_WIDTH
+		width = self.width // (TILE_WIDTH*2/self.zoom)
+		height = self.height // (TILE_WIDTH*2/self.zoom)
 
 		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
 
@@ -975,6 +976,7 @@ def main():
 		output = []
 
 		global highlight
+		global drawcalls
 		highlight.clear()
 
 		# poll input, put in curr_input and prev_input
@@ -992,7 +994,7 @@ def main():
 					curr_input.remove(event.key)
 
 		def f():
-			return '*************'
+			return '~~~~~~~~~~~~~~'
 		debug_func = f
 
 		# keypad handle input
