@@ -909,11 +909,15 @@ class SpriteBatch:
 		scale = (int(rect.width), int(rect.height))
 		image = pygame.transform.scale(image, scale)
 
+		result = None
+
 		if (fliphorz):
 			image = pygame.transform.flip(image, True, False)
-			screen.blit(image, rect.get_pyrect())
+			result = (image, rect.get_pyrect())
 		else:
-			screen.blit(image, rect.get_pyrect())
+			result = (image, rect.get_pyrect())
+
+		return result
 
 
 def main():
@@ -1041,6 +1045,9 @@ def main():
 		# get camera maptile range
 		camerabounds = camera.get_maptilebounds(geometry)
 
+		# draw sprites
+		blitlist = []
+
 		# draw background
 
 		# draw middle ground sprites
@@ -1053,7 +1060,9 @@ def main():
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
 					rect = camera.get_screenrect(rect)
-					spritebatch.draw(screen, si, rect)
+					blitlist.append(spritebatch.draw(screen, si, rect))
+		screen.blits(blitlist)
+		blitlist.clear()
 
 		# draw geometry sprites
 		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
@@ -1065,14 +1074,17 @@ def main():
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
 					rect = camera.get_screenrect(rect)
-					spritebatch.draw(screen, si, rect)
+					blitlist.append(spritebatch.draw(screen, si, rect))
+		screen.blits(blitlist)
+		blitlist.clear()
 
 		# draw player
 		playerpos = player.physicsbody.get_pos()
 		playerrect = Rect(playerpos, player.physicsbody.get_dim())
 		playerrect = camera.get_screenrect(playerrect)
-		spritebatch.draw(
+		playerblit = spritebatch.draw(
 			screen, player.spriteindex, playerrect, fliphorz=(player.facing_direction <= 0))
+		screen.blit(*playerblit)
 		
 
 		# highlight tiles for debug
