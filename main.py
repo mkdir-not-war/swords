@@ -642,7 +642,7 @@ class PhysicsBody:
 class Player:
 	def __init__(self, spritebatch):
 		# draw stuff
-		self.spriteindex = spritebatch.add('knight01', 'actor')
+		self.spriteindex = spritebatch.add('tallknight', 'actor')
 
 		# physics stuff
 		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=3)

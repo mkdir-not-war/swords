@@ -8,5 +8,12 @@
 		"tilestall" : "3",
 		"frameswide" : "1",
 		"framestall" : "1"
+	},
+	"tallknight" : {
+		"file" : "./res/actors/player/tallknight.png",
+		"tileswide" : "2",
+		"tilestall" : "4",
+		"frameswide" : "1",
+		"framestall" : "1"
 	}
 }

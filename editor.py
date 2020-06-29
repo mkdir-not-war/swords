@@ -263,11 +263,11 @@ class Camera:
 		self.height = height
 
 class MapData:
-	def __init__(self, filename=None):
+	def __init__(self, filename=None, dim=(0,0)):
 		self.filename = filename
 
-		self.width = 0
-		self.height = 0
+		self.width = dim[0]
+		self.height = dim[1]
 		self.geo = [False] * (self.width * self.height)
 		self.spawn = (0, 0) # bottom left!! of spawn loc
 
@@ -283,11 +283,11 @@ class MapData:
 	def newmap(self, spritebatch):
 		self.filename = input('filename: ')
 
-		self.width = width = int(input('map width: '))*2
-		self.height = height = int(input('map height: '))*2
+		self.width = int(input('map width: '))*2
+		self.height = int(input('map height: '))*2
 
-		self.spriteindex_geo = [-1] * (width * height)
-		self.spriteindex_mg = [-1] * (width * height)
+		self.spriteindex_geo = [-1] * (self.width * self.height)
+		self.spriteindex_mg = [-1] * (self.width * self.height)
 
 		self.spawn = (2, self.height-3)
 
