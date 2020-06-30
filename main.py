@@ -37,6 +37,11 @@ EARLYJUMP_FRAMES = 8
 E_WATER = 0
 E_FIRE = 1
 E_WIND = 2
+E_ETHER = 3
+E_ICE = 4
+E_SUN = 5
+E_LIFE = 6
+E_BLOOD = 7
 
 # debug tiles
 highlight = []
@@ -584,6 +589,8 @@ class PhysicsBody:
 		self.dp = (0, 0)
 		self.forces = []
 
+		# bounding boxes completely within self.rect??
+
 		self.collisions = [0]*4
 
 	def get_pos(self):
@@ -643,9 +650,11 @@ class Player:
 	def __init__(self, spritebatch):
 		# draw stuff
 		self.spriteindex = spritebatch.add('tallknight', 'actor')
+		sprite = spritebatch.get(self.spriteindex)
+		width, height = sprite.tileswide, sprite.tilestall
 
 		# physics stuff
-		self.physicsbody = PhysicsBody(widthintiles=2, heightintiles=3)
+		self.physicsbody = PhysicsBody(widthintiles=width, heightintiles=height)
 		self.jumps_remaining = 0
 		self.jump_timer = 0.0
 		self.fall_timer = 0
@@ -837,14 +846,14 @@ class SpriteSheet:
 
 		if (datatype == 'scene'):
 			self.image = pygame.image.load(data[name]['file'])
-			self.frameswide = data[name]['frameswide']
-			self.framestall = data[name]['framestall']
+			self.frameswide = int(data[name]['frameswide'])
+			self.framestall = int(data[name]['framestall'])
 		elif (datatype == 'actor'):
 			self.image = pygame.image.load(data[name]['file'])
-			self.tileswide = data[name]['tileswide']
-			self.tilestall = data[name]['tilestall']
-			self.frameswide = data[name]['frameswide']
-			self.framestall = data[name]['framestall']
+			self.tileswide = int(data[name]['tileswide'])
+			self.tilestall = int(data[name]['tilestall'])
+			self.frameswide = int(data[name]['frameswide'])
+			self.framestall = int(data[name]['framestall'])
 
 	def get_image(self):
 		result = self.image
