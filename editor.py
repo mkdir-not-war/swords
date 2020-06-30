@@ -276,7 +276,7 @@ def newmap(spritebatch):
 	result.spriteindex_geo = [-1] * (width * height)
 	result.spriteindex_mg = [-1] * (width * height)
 
-	result.spawn = (2, self.height-3)
+	result.spawn = (2, height-3)
 
 	# greybox collision border around the map
 	index = spritebatch.add('bluebox')
@@ -313,8 +313,6 @@ class MapData:
 		return result
 
 	def get_mgspriteindex(self, x, y):
-		print(len(self.spriteindex_mg), x+self.width*y)
-
 		result = self.spriteindex_mg[x + self.width * y]
 		return result
 

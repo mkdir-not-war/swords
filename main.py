@@ -17,7 +17,8 @@ MOUSE_MOVE_SPEED_MULT = 1.7
 
 # physics
 HORZ_FRIC = 0.00975 #0.156/16 @ 30 FPS
-VERT_FRIC = 0.00075 #0.012/16 @ 30 FPS
+#VERT_FRIC = 0.00075 #0.012/16 @ 30 FPS
+VERT_FRIC = 0.00079
 GRAVITY_ACCEL = 80 #55 @ 30 FPS
 TIME_STEP = 1.0/FPS
 
@@ -26,8 +27,13 @@ VEL_CLAMTOZERO_RANGE = 5.0
 RECT_FAT_MOD = 1.05
 
 # movement
+'''
 SIDEWAYS_ACCEL = 230 #130 @ 30 FPS
 JUMP_ACCEL = 2800 #1460 @ 30 FPS
+JUMP_COOLDOWN_SEC = 0.2
+'''
+SIDEWAYS_ACCEL = 235
+JUMP_ACCEL = 4100
 JUMP_COOLDOWN_SEC = 0.2
 
 COYOTE_FRAMES = 5
@@ -946,7 +952,7 @@ def main():
 	inputdata = InputDataBuffer()
 
 	# DEBUGGING
-	filename = 'first-dungeon'
+	filename = 'widemap'
 
 	# Load in the test map
 	geometry = MapData()
@@ -1044,6 +1050,10 @@ def main():
 
 		# get camera maptile range
 		camerabounds = camera.get_maptilebounds(geometry)
+		camera_minx = max(camerabounds.x-1, 0)
+		camera_miny = max(camerabounds.y-1, 0)
+		camera_maxx = min(camerabounds.x + camerabounds.width, geometry.width)
+		camera_maxy = min(camerabounds.y + camerabounds.height, geometry.height)
 
 		# draw sprites
 		blitlist = []
@@ -1051,8 +1061,8 @@ def main():
 		# draw background
 
 		# draw middle ground sprites
-		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
-			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
+		for j in range(camera_miny, camera_maxy):
+			for i in range(camera_minx, camera_maxx):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
@@ -1065,8 +1075,8 @@ def main():
 		blitlist.clear()
 
 		# draw geometry sprites
-		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
-			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
+		for j in range(camera_miny, camera_maxy):
+			for i in range(camera_minx, camera_maxx):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
