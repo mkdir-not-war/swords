@@ -262,6 +262,37 @@ class Camera:
 		self.width = width
 		self.height = height
 
+'''
+doesn't fuck with self.geo because it doesn't matter for the editor
+'''
+def newmap(spritebatch):
+	filename = input('filename: ')
+
+	width = int(input('map width: '))*2
+	height = int(input('map height: '))*2
+
+	result = MapData(filename=filename, dim=(width, height))
+
+	result.spriteindex_geo = [-1] * (width * height)
+	result.spriteindex_mg = [-1] * (width * height)
+
+	result.spawn = (2, self.height-3)
+
+	# greybox collision border around the map
+	index = spritebatch.add('bluebox')
+	result.spriteindexset.append(('bluebox', index))
+
+	xs = [0, width//2-1]
+	ys = [0, height//2-1]
+
+	for j in range(height//2):
+		for i in range(width//2):
+			if (i in xs or j in ys):
+				x, y = i*2, j*2
+				result.spriteindex_geo[x + width * y] = index
+
+	return result
+
 class MapData:
 	def __init__(self, filename=None, dim=(0,0)):
 		self.filename = filename
@@ -277,38 +308,13 @@ class MapData:
 		self.spriteindex_geo = [-1] * (self.width * self.height)
 		self.spriteindex_mg = [-1] * (self.width * self.height)
 
-	'''
-	doesn't fuck with self.geo because it doesn't matter for the editor
-	'''
-	def newmap(self, spritebatch):
-		self.filename = input('filename: ')
-
-		self.width = int(input('map width: '))*2
-		self.height = int(input('map height: '))*2
-
-		self.spriteindex_geo = [-1] * (self.width * self.height)
-		self.spriteindex_mg = [-1] * (self.width * self.height)
-
-		self.spawn = (2, self.height-3)
-
-		# greybox collision border around the map
-		index = spritebatch.add('bluebox')
-		self.spriteindexset.append(('bluebox', index))
-
-		xs = [0, self.width//2-1]
-		ys = [0, self.height//2-1]
-
-		for j in range(self.height//2):
-			for i in range(self.width//2):
-				if (i in xs or j in ys):
-					x, y = i*2, j*2
-					self.spriteindex_geo[x + self.width * y] = index
-
 	def get_geospriteindex(self, x, y):
 		result = self.spriteindex_geo[x + self.width * y]
 		return result
 
 	def get_mgspriteindex(self, x, y):
+		print(len(self.spriteindex_mg), x+self.width*y)
+
 		result = self.spriteindex_mg[x + self.width * y]
 		return result
 
@@ -830,9 +836,7 @@ def main(argv):
 		geometry = MapData(mapname)
 		geometry.load(spritebatch)
 	else:
-		geometry = MapData()
-		geometry.newmap(spritebatch)
-	
+		geometry = newmap(spritebatch)
 
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
@@ -918,7 +922,7 @@ def main(argv):
 			width = input('width: ')
 			height = input('height: ')
 			geometry = MapData(filename, (int(width), int(height)))
-			#geometry.save()
+			geometry.save()
 
 		# mouse input
 		screenmousepos = pygame.mouse.get_pos()
@@ -974,12 +978,16 @@ def main(argv):
 
 		# get camera maptile range
 		camerabounds = camera.get_maptilebounds(geometry)
+		camera_minx = max(camerabounds.x-1, 0)
+		camera_miny = max(camerabounds.y-1, 0)
+		camera_maxx = min(camerabounds.x + camerabounds.width, geometry.width)
+		camera_maxy = min(camerabounds.y + camerabounds.height, geometry.height)
 
 		# draw background
 
 		# draw middle ground sprites
-		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
-			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
+		for j in range(camera_miny, camera_maxy):
+			for i in range(camera_minx, camera_maxx):
 				si = geometry.get_mgspriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
@@ -990,8 +998,8 @@ def main(argv):
 					spritebatch.draw(screen, si, rect)
 
 		# draw geometry sprites
-		for j in range(camerabounds.y-1, camerabounds.y + camerabounds.height):
-			for i in range(camerabounds.x-1, camerabounds.x + camerabounds.width):
+		for j in range(camera_miny, camera_maxy):
+			for i in range(camera_minx, camera_maxx):
 				si = geometry.get_geospriteindex(i, j)
 				if (si >= 0):
 					rect = Rect(
