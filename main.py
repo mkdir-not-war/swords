@@ -1017,90 +1017,90 @@ def main():
 		global highlight
 		highlight.clear()
 
-		# poll input, put in curr_input and prev_input
-		prev_input = curr_input[:]
-		inputdata.newinput()
-		for event in pygame.event.get(): # User did something.
-			if event.type == pygame.QUIT: # If user clicked close.
-				done = True # Flag that we are done so we exit this loop.
-			elif event.type == pygame.JOYBUTTONDOWN:
-				print("Joystick button pressed.")
-			elif event.type == pygame.KEYDOWN:
-				curr_input.append(event.key)
-			elif event.type == pygame.KEYUP:
-				if event.key in curr_input:
-					curr_input.remove(event.key)
-
-		def f():
-			return '~~~~~~~~~~~~~~'
-		debug_func = f
-
-		# keypad handle input
-		if pygame.K_ESCAPE in curr_input:
-			done = True
-		if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
-			output.append(debug_func())
-
-		# movement
-		moveinputvecx, moveinputvecy = (0, 0)
-
-		# keyboard directions
-		if pygame.K_LEFT in curr_input:
-			moveinputvecx += -1
-		if pygame.K_RIGHT in curr_input:
-			moveinputvecx += 1
-		if pygame.K_DOWN in curr_input:
-			moveinputvecy += 1
-		if pygame.K_UP in curr_input:
-			moveinputvecy += -1
-
-		if moveinputvecx > 0:
-			slope = moveinputvecy/moveinputvecx
-			if (slope < -2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-				inputdata.set_var(InputDataIndex.DUCK, 1)
-			elif (slope > -2.41 and slope < -0.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_RIGHT)
-				inputdata.set_var(InputDataIndex.DUCK, 1)
-			elif (slope > -0.41 and slope < 0.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.RIGHT)
-			elif (slope > 0.41 and slope < 2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_RIGHT)
-			elif (slope > 2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-		elif moveinputvecx < 0:
-			slope = moveinputvecy/moveinputvecx
-			if (slope < -2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-			elif (slope > -2.41 and slope < -0.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_LEFT)
-			elif (slope > -0.41 and slope < 0.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.LEFT)
-			elif (slope > 0.41 and slope < 2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_LEFT)
-				inputdata.set_var(InputDataIndex.DUCK, 1)
-			elif (slope > 2.41):
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-				inputdata.set_var(InputDataIndex.DUCK, 1)
-		else:
-			if moveinputvecy > 0:
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-				inputdata.set_var(InputDataIndex.DUCK, 1)
-			elif moveinputvecy < 0:
-				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-		
-		# jumping
-		if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
-			inputdata.set_var(InputDataIndex.JUMP, 1)
-
-		# attacks & combos
-		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
-			pass
-			#inputdata.set_jump(True)
-
 		while (accum >= TIME_STEP):
 			accum -= TIME_STEP
 			t += TIME_STEP
+
+			# poll input, put in curr_input and prev_input
+			prev_input = curr_input[:]
+			inputdata.newinput()
+			for event in pygame.event.get(): # User did something.
+				if event.type == pygame.QUIT: # If user clicked close.
+					done = True # Flag that we are done so we exit this loop.
+				elif event.type == pygame.JOYBUTTONDOWN:
+					print("Joystick button pressed.")
+				elif event.type == pygame.KEYDOWN:
+					curr_input.append(event.key)
+				elif event.type == pygame.KEYUP:
+					if event.key in curr_input:
+						curr_input.remove(event.key)
+
+			def f():
+				return '~~~~~~~~~~~~~~'
+			debug_func = f
+
+			# keypad handle input
+			if pygame.K_ESCAPE in curr_input:
+				done = True
+			if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
+				output.append(debug_func())
+
+			# movement
+			moveinputvecx, moveinputvecy = (0, 0)
+
+			# keyboard directions
+			if pygame.K_LEFT in curr_input:
+				moveinputvecx += -1
+			if pygame.K_RIGHT in curr_input:
+				moveinputvecx += 1
+			if pygame.K_DOWN in curr_input:
+				moveinputvecy += 1
+			if pygame.K_UP in curr_input:
+				moveinputvecy += -1
+
+			if moveinputvecx > 0:
+				slope = moveinputvecy/moveinputvecx
+				if (slope < -2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+					inputdata.set_var(InputDataIndex.DUCK, 1)
+				elif (slope > -2.41 and slope < -0.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_RIGHT)
+					inputdata.set_var(InputDataIndex.DUCK, 1)
+				elif (slope > -0.41 and slope < 0.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.RIGHT)
+				elif (slope > 0.41 and slope < 2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_RIGHT)
+				elif (slope > 2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+			elif moveinputvecx < 0:
+				slope = moveinputvecy/moveinputvecx
+				if (slope < -2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+				elif (slope > -2.41 and slope < -0.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_LEFT)
+				elif (slope > -0.41 and slope < 0.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.LEFT)
+				elif (slope > 0.41 and slope < 2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_LEFT)
+					inputdata.set_var(InputDataIndex.DUCK, 1)
+				elif (slope > 2.41):
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+					inputdata.set_var(InputDataIndex.DUCK, 1)
+			else:
+				if moveinputvecy > 0:
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+					inputdata.set_var(InputDataIndex.DUCK, 1)
+				elif moveinputvecy < 0:
+					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+			
+			# jumping
+			if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
+				inputdata.set_var(InputDataIndex.JUMP, 1)
+
+			# attacks & combos
+			if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
+				pass
+				#inputdata.set_jump(True)
 
 			output.extend(player_handleinput(player, inputdata))
 
