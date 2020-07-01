@@ -443,12 +443,12 @@ def update_physicsbodies(physicsbodies, geometry):
 		if (pb.dp[0] < VEL_CLAMTOZERO_RANGE and pb.dp[0] > -VEL_CLAMTOZERO_RANGE):
 			pb.dp = (0.0, pb.dp[1])	
 
+		# update velocity with integration of accel
+		pb.dp = v2_add(pb.dp, tuple_mult(ddp, TIME_STEP))
+
 		# move() using kinematics and old velocity
 		deltapos = v2_add(tuple_mult(ddp, TIME_STEP*TIME_STEP*0.5), tuple_mult(pb.dp, TIME_STEP))
 		newrect.move(deltapos)
-
-		# update velocity with integration of accel
-		pb.dp = v2_add(pb.dp, tuple_mult(ddp, TIME_STEP))
 
 		# put it in the list
 		new_rects.append(newrect)
@@ -991,8 +991,6 @@ def main():
 
 	# load fonts
 	font = pygame.font.Font('./data/fonts/ARI.ttf', 32)
-	# text = font.render('test', True, black, white)
-	# screen.blit(text, rect)
 
 	'''
 	Probably going to be setting up some memory constructs around here
@@ -1058,6 +1056,7 @@ def main():
 			if pygame.K_UP in curr_input:
 				moveinputvecy += -1
 
+			# discrete thumbstick/keyboard directions
 			if moveinputvecx > 0:
 				slope = moveinputvecy/moveinputvecx
 				if (slope < -2.41):
