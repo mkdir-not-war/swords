@@ -782,15 +782,25 @@ def player_handleinput(player, inputdata):
 		force = (SIDEWAYS_ACCEL, 0)
 		player.physicsbody.addforce(force)
 
-	# jump
+	# jumping & long jumping
 	if (jump and player.jumps_remaining > 0):
-		player.halt_vert_vel()
-		force = (0, -JUMP_ACCEL)
-		player.physicsbody.addforce(force)
-		player.jumps_remaining -= 1
+		if (False):#player.sliding):
+			pass
+		else:
+			player.halt_vert_vel()
+			force = (0, -JUMP_ACCEL)
+			player.physicsbody.addforce(force)
+			player.jumps_remaining -= 1
 
-	# use magic
+	# dodging
 
+	# ducking & sliding
+
+	# check for spells
+	'''
+	DOWN -> DOWN_DIR -> DIR -> ATTACK
+	UP -> UP_DIR -> DIR -> ATTACK
+	'''
 
 	return output
 
@@ -809,6 +819,11 @@ class InputDataIndex(IntEnum):
 	MOVE_DIR = 0
 	DUCK = 1
 	JUMP = 2
+	LIGHT_ATK = 3
+	HEAVY_ATK = 4
+	DODGE = 5
+	ACTIVATE = 6
+	GUARD = 7
 
 class InputDataBuffer:
 	def __init__(self):
@@ -818,9 +833,8 @@ class InputDataBuffer:
 		self.vars = []
 
 		# append in order of input data index enum
-		self.vars.append([]) # movedir 0
-		self.vars.append([]) # duck 1
-		self.vars.append([]) # jump 2
+		for inputtype in InputDataIndex:
+			self.vars.append([])
 
 	def newinput(self):
 		if (self.queuelength == self.maxqueuelength):
@@ -1022,6 +1036,7 @@ def main():
 		global highlight
 		highlight.clear()
 
+		# poll input and update physics 100 times a second
 		while (accum >= PHYSICS_TIME_STEP):
 			accum -= PHYSICS_TIME_STEP
 			t += PHYSICS_TIME_STEP
@@ -1100,23 +1115,31 @@ def main():
 				elif moveinputvecy < 0:
 					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
 			
-			# jumping
+			# jumping & dodging
 			if pygame.K_SPACE in curr_input and not pygame.K_SPACE in prev_input:
 				inputdata.set_var(InputDataIndex.JUMP, 1)
+			if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
+				inputdata.set_var(InputDataIndex.DODGE, 1)
 
-			# attacks & combos
-			if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
-				pass
-				#inputdata.set_jump(True)
+			# guarding and attacks (& spells)
+			if pygame.K_g in curr_input and not pygame.K_g in prev_input:
+				inputdata.set_var(InputDataIndex.GUARD, 1)
+			if pygame.K_f in curr_input and not pygame.K_f in prev_input:
+				inputdata.set_var(InputDataIndex.LIGHT_ATK, 1)
+			if pygame.K_d in curr_input and not pygame.K_d in prev_input:
+				inputdata.set_var(InputDataIndex.HEAVY_ATK, 1)
 
 			output.extend(player_handleinput(player, inputdata))
 
-			# updates
+			# physics and logic updates
 			output.append(player_update(player))
 
 			update_physicsbodies(physicsbodies, geometry)
 
 			camera.update_pos(player)
+
+		# handle AI less often than physics?
+		#megabrain.update()
 
 		# start drawing
 		screen.fill(grey)
