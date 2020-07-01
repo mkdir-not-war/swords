@@ -740,14 +740,22 @@ def player_update(player):
 def player_handleinput(player, inputdata):
 	output = []
 
-	movedirection = inputdata.get_var(InputDataIndex.MOVE_DIR)
+	movedir = inputdata.get_var(InputDataIndex.MOVE_DIR)
 	jump = (inputdata.get_var(InputDataIndex.JUMP) > 0)
 	recent_jump = inputdata.had_var(InputDataIndex.JUMP, 1, frames=EARLYJUMP_FRAMES)
 
 	# move left and right
-	if (movedirection != 0):
-		player.facing_direction = movedirection
-		force = tuple_mult((movedirection, 0), SIDEWAYS_ACCEL)
+	if (movedir == InputMoveDir.LEFT or 
+		movedir == InputMoveDir.UP_LEFT or 
+		movedir == InputMoveDir.DOWN_LEFT):
+		player.facing_direction = -1
+		force = (-SIDEWAYS_ACCEL, 0)
+		player.physicsbody.addforce(force)
+	elif (movedir == InputMoveDir.RIGHT or 
+		movedir == InputMoveDir.UP_RIGHT or 
+		movedir == InputMoveDir.DOWN_RIGHT):
+		player.facing_direction = 1
+		force = (SIDEWAYS_ACCEL, 0)
 		player.physicsbody.addforce(force)
 
 	# jump
@@ -777,6 +785,17 @@ def player_handleinput(player, inputdata):
 	'''
 
 	return output
+
+class InputMoveDir(IntEnum):
+	NONE = 0
+	RIGHT = 1
+	UP_RIGHT = 2
+	UP = 3
+	UP_LEFT = 4
+	LEFT = 5
+	DOWN_LEFT = 6
+	DOWN = 7
+	DOWN_RIGHT = 8
 
 class InputDataIndex(IntEnum):
 	MOVE_DIR = 0
@@ -1017,18 +1036,66 @@ def main():
 			output.append(debug_func())
 
 		# movement
-		moveinput = 0 # only left or right
+		moveinputvecx, moveinputvecy = (0, 0)
+
+		# keyboard directions
+		'''
 		if pygame.K_LEFT in curr_input:
 			inputdata.set_var(InputDataIndex.MOVE_DIR, -1)
 		if pygame.K_RIGHT in curr_input:
 			inputdata.set_var(InputDataIndex.MOVE_DIR, 1)
 		if pygame.K_DOWN in curr_input:
 			inputdata.set_var(InputDataIndex.DUCK, 1)
-
 		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
 			inputdata.set_var(InputDataIndex.JUMP, 1)
-		
+		'''
+		if pygame.K_LEFT in curr_input:
+			moveinputvecx += -1
+		if pygame.K_RIGHT in curr_input:
+			moveinputvecx += 1
+		if pygame.K_DOWN in curr_input:
+			moveinputvecy += 1
+		if pygame.K_UP in curr_input:
+			moveinputvecy += -1
 
+		if moveinputvecx > 0:
+			slope = moveinputvecy/moveinputvecx
+			if (slope < -2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				inputdata.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > -2.41 and slope < -0.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_RIGHT)
+				inputdata.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > -0.41 and slope < 0.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.RIGHT)
+			elif (slope > 0.41 and slope < 2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_RIGHT)
+			elif (slope > 2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+		elif moveinputvecx < 0:
+			slope = moveinputvecy/moveinputvecx
+			if (slope < -2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+			elif (slope > -2.41 and slope < -0.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_LEFT)
+			elif (slope > -0.41 and slope < 0.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.LEFT)
+			elif (slope > 0.41 and slope < 2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_LEFT)
+				inputdata.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > 2.41):
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				inputdata.set_var(InputDataIndex.DUCK, 1)
+		else:
+			if moveinputvecy > 0:
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				inputdata.set_var(InputDataIndex.DUCK, 1)
+			elif moveinputvecy < 0:
+				inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+		
+		# jumping
+		if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
+			inputdata.set_var(InputDataIndex.JUMP, 1)
 
 		# attacks & combos
 		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
