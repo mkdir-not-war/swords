@@ -3,10 +3,12 @@ from math import sqrt
 from enum import IntEnum
 import json
 
-#constants
+# constants
 TILE_WIDTH = 16
-FPS = 60
 MAXINPUTQUEUELEN = 10
+
+# time
+TIME_STEP = 1.0/60
 
 # camera
 ZOOM_MULT = 2.2
@@ -19,7 +21,6 @@ MOUSE_MOVE_SPEED_MULT = 1.7
 HORZ_FRIC = 0.00975
 VERT_FRIC = 0.00081
 GRAVITY_ACCEL = 68
-TIME_STEP = 1.0/FPS
 
 # fudge factors
 VEL_CLAMTOZERO_RANGE = 5.0
@@ -989,11 +990,9 @@ def main():
 	playerimg = pygame.image.load('./res/actors/player/knight01.png')
 
 	# load fonts
-	''' sample font code, but pretty pygame specific.
-	# font = pygame.font.Font('fontname.ttf', 32)
+	font = pygame.font.Font('./data/fonts/ARI.ttf', 32)
 	# text = font.render('test', True, black, white)
 	# screen.blit(text, rect)
-	'''
 
 	'''
 	Probably going to be setting up some memory constructs around here
@@ -1002,13 +1001,20 @@ def main():
 	camera = Camera(geometry.get_tile2pos(*geometry.spawn), screendim)
 	screen = camera.get_camerascreen(window)
 
+	# timing stuff
+	t = 0.0
+	accum = 0.0
+
 	while not done:
-		clock.tick(FPS)
+		frametime = clock.tick() # time passed in millisecondss
+		accum += frametime/1000.0
+
+		# display FPS
+		fps_text = font.render(str(int(clock.get_fps())), 0, red)
 
 		output = []
 
 		global highlight
-		global drawcalls
 		highlight.clear()
 
 		# poll input, put in curr_input and prev_input
@@ -1039,16 +1045,6 @@ def main():
 		moveinputvecx, moveinputvecy = (0, 0)
 
 		# keyboard directions
-		'''
-		if pygame.K_LEFT in curr_input:
-			inputdata.set_var(InputDataIndex.MOVE_DIR, -1)
-		if pygame.K_RIGHT in curr_input:
-			inputdata.set_var(InputDataIndex.MOVE_DIR, 1)
-		if pygame.K_DOWN in curr_input:
-			inputdata.set_var(InputDataIndex.DUCK, 1)
-		if pygame.K_UP in curr_input and not pygame.K_UP in prev_input:
-			inputdata.set_var(InputDataIndex.JUMP, 1)
-		'''
 		if pygame.K_LEFT in curr_input:
 			moveinputvecx += -1
 		if pygame.K_RIGHT in curr_input:
@@ -1102,14 +1098,18 @@ def main():
 			pass
 			#inputdata.set_jump(True)
 
-		output.extend(player_handleinput(player, inputdata))
+		while (accum >= TIME_STEP):
+			accum -= TIME_STEP
+			t += TIME_STEP
 
-		# updates
-		output.append(player_update(player))
+			output.extend(player_handleinput(player, inputdata))
 
-		update_physicsbodies(physicsbodies, geometry)
+			# updates
+			output.append(player_update(player))
 
-		camera.update_pos(player)
+			update_physicsbodies(physicsbodies, geometry)
+
+			camera.update_pos(player)
 
 		# start drawing
 		screen.fill(grey)
@@ -1199,6 +1199,8 @@ def main():
 					)
 					pygame.draw.rect(screen, black, rect.get_pyrect(), 1)
 		'''
+
+		screen.blit(fps_text, (1, 1))
 		
 
 		pygame.display.flip()
