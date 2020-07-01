@@ -8,7 +8,7 @@ TILE_WIDTH = 16
 MAXINPUTQUEUELEN = 10
 
 # time
-TIME_STEP = 1.0/60
+PHYSICS_TIME_STEP = 1.0/100
 
 # camera
 ZOOM_MULT = 2.2
@@ -17,19 +17,31 @@ CAMERA_HEIGHT = 750
 MOUSE_MOVE_BORDER_MULT = .8
 MOUSE_MOVE_SPEED_MULT = 1.7
 
-# physics
+''' 
+# physics @ PHYSICS_TIME_STEP = 1/60
 HORZ_FRIC = 0.00975
 VERT_FRIC = 0.00081
 GRAVITY_ACCEL = 68
 
-# fudge factors
-VEL_CLAMTOZERO_RANGE = 5.0
-RECT_FAT_MOD = 1.05
-
-# movement
+# movement @ PHYSICS_TIME_STEP = 1/60
 SIDEWAYS_ACCEL = 245
 JUMP_ACCEL = 3830
 JUMP_COOLDOWN_SEC = 0.2
+'''
+
+# physics @ PHYSICS_TIME_STEP = 1/100
+HORZ_FRIC = 0.00975
+VERT_FRIC = 0.00066
+GRAVITY_ACCEL = 64
+
+# movement @ PHYSICS_TIME_STEP = 1/100
+SIDEWAYS_ACCEL = 245
+JUMP_ACCEL = 5020
+JUMP_COOLDOWN_SEC = 0.2
+
+# fudge factors
+VEL_CLAMTOZERO_RANGE = 5.0
+RECT_FAT_MOD = 1.05
 
 COYOTE_FRAMES = 5
 EARLYJUMP_FRAMES = 8
@@ -324,7 +336,9 @@ class MapData:
 		return result
 
 	def get_nearesttilepos(self, x, y):
-		result = ((x+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH, (y+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH)
+		result = (
+			(x+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH, 
+			(y+TILE_WIDTH/2)//TILE_WIDTH*TILE_WIDTH)
 		return result
 
 	# only returns geometry (in world coord's) that is solid (i.e. True in MapData.geo)
@@ -444,10 +458,16 @@ def update_physicsbodies(physicsbodies, geometry):
 			pb.dp = (0.0, pb.dp[1])	
 
 		# update velocity with integration of accel
-		pb.dp = v2_add(pb.dp, tuple_mult(ddp, TIME_STEP))
+		pb.dp = v2_add(pb.dp, tuple_mult(ddp, PHYSICS_TIME_STEP))
+
+		'''
+		# move() using kinematics and old velocity
+		deltapos = v2_add(tuple_mult(ddp, PHYSICS_TIME_STEP*PHYSICS_TIME_STEP*0.5), tuple_mult(pb.dp, PHYSICS_TIME_STEP))
+		newrect.move(deltapos)
+		'''
 
 		# move() using kinematics and old velocity
-		deltapos = v2_add(tuple_mult(ddp, TIME_STEP*TIME_STEP*0.5), tuple_mult(pb.dp, TIME_STEP))
+		deltapos = tuple_mult(pb.dp, PHYSICS_TIME_STEP)
 		newrect.move(deltapos)
 
 		# put it in the list
@@ -477,12 +497,12 @@ def update_physicsbodies(physicsbodies, geometry):
 			highlight.append((Rect(nearesttilepos, (TILE_WIDTH, TILE_WIDTH)), 'green'))
 
 			newrecth = pb.rect.copy()
-			newrecth.x += pbdp[0] * TIME_STEP
+			newrecth.x += pbdp[0] * PHYSICS_TIME_STEP
 			newrecth.y = nearesttilepos[1] # this makes you fall into corners??
 
 			newrectv = pb.rect.copy()
 			newrectv.x = nearesttilepos[0] # this prevents getting caught on corners
-			newrectv.y += pbdp[1] * TIME_STEP
+			newrectv.y += pbdp[1] * PHYSICS_TIME_STEP
 
 			horzcollide = False
 			vertcollide = False
@@ -536,7 +556,9 @@ def update_physicsbodies(physicsbodies, geometry):
 				physicsbodies[ri].dp = (0, 0)
 
 			# convex corner, basically perfect diagonal velocity
-			elif (not diag_tile is None and not pb.get_collidesvert() and not pb.get_collideshorz()):
+			elif (not diag_tile is None and 
+				not pb.get_collidesvert() and 
+				not pb.get_collideshorz()):
 				# corner is above
 				if (diag_direction[1] < 0):
 					# if falling, continue falling
@@ -569,7 +591,8 @@ def update_physicsbodies(physicsbodies, geometry):
 						physicsbodies[ri].dp = (0, pbdp[1])
 
 
-	# if rect collides with other physics bodies and is "solid", don't move (apply backwards force??)
+	# if rect collides with other physics bodies and is "solid", 
+	# don't move (apply backwards force??)
 
 	# if rect is collides with an attack, don't move
 
@@ -716,7 +739,7 @@ def player_update(player):
 				player.jump_timer = 0.0
 				player.fall_timer = 0
 		else:
-			player.jump_timer += TIME_STEP
+			player.jump_timer += PHYSICS_TIME_STEP
 
 	# coyote time only occurs at max jumps (walking off a surface)
 	elif (not player.physicsbody.get_collidedown()):
@@ -729,7 +752,7 @@ def player_update(player):
 
 	# handle magic and stamina
 	if (player.curr_mana < player.max_mana):
-		player.time_remaining_to_recover -= TIME_STEP
+		player.time_remaining_to_recover -= PHYSICS_TIME_STEP
 		if (player.time_remaining_to_recover < 0.0):
 			player.spells_used = []
 			player.spells_used_len = 0
@@ -767,23 +790,7 @@ def player_handleinput(player, inputdata):
 		player.jumps_remaining -= 1
 
 	# use magic
-	'''
-	if element >= 0:
-		if player.curr_mana > 0:
-			lastelement = player.last_element
-			output.append(element)
-			if lastelement >= 0 and element in magic_combos[lastelement]:
-				# don't expend mana until a combo is successful
-				output.append('%d+%s -> %s' % (lastelement, element, magic_combos[lastelement][element]))
-				player.curr_mana -= 1
-				player.time_remaining_to_recover = player.time_until_recover_mana
-				# refresh last element so as not to overlap combos
-				player.last_element = -1
-			else:
-				player.last_element = element
-		else:
-			output.append('out of mana')
-	'''
+
 
 	return output
 
@@ -1015,9 +1022,9 @@ def main():
 		global highlight
 		highlight.clear()
 
-		while (accum >= TIME_STEP):
-			accum -= TIME_STEP
-			t += TIME_STEP
+		while (accum >= PHYSICS_TIME_STEP):
+			accum -= PHYSICS_TIME_STEP
+			t += PHYSICS_TIME_STEP
 
 			# poll input, put in curr_input and prev_input
 			prev_input = curr_input[:]
@@ -1041,7 +1048,8 @@ def main():
 			if pygame.K_ESCAPE in curr_input:
 				done = True
 			if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
-				output.append(debug_func())
+				#output.append(debug_func())
+				pass
 
 			# movement
 			moveinputvecx, moveinputvecy = (0, 0)
@@ -1093,7 +1101,7 @@ def main():
 					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
 			
 			# jumping
-			if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
+			if pygame.K_SPACE in curr_input and not pygame.K_SPACE in prev_input:
 				inputdata.set_var(InputDataIndex.JUMP, 1)
 
 			# attacks & combos
