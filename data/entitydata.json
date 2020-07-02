@@ -1,0 +1,26 @@
+{
+	"datatype" : "entity",
+	
+	"player-local" : {
+		"testnull" : null,
+		"spritedata" : {
+			"spritename" : "tallknight"
+		},
+		"physicsdata" : {
+			"height" : "4",
+			"width" : "2"
+		},
+		"player" : 1
+	},
+	"player-other" : {
+		"testnull" : null,
+		"spritedata" : {
+			"spritename" : "tallknight"
+		},
+		"physicsdata" : {
+			"height" : "4",
+			"width" : "2"
+		},
+		"player" : null
+	}
+}

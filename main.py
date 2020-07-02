@@ -210,10 +210,10 @@ class Camera:
 			pos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
 			pos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
 
-	def update_pos(self, player):
+	def update_pos(self, playerphysics):
 		# TODO: do this smarter
-		newpos = player.physicsbody.get_pos()
-		pwidth, pheight = player.physicsbody.get_dim()
+		newpos = playerphysics.get_pos()
+		pwidth, pheight = playerphysics.get_dim()
 		self.pos = (
 			newpos[0] - CAMERA_WIDTH/2/ZOOM_MULT + pwidth//2, 
 			newpos[1] - CAMERA_HEIGHT/2/ZOOM_MULT + pheight//2)
@@ -354,8 +354,8 @@ class MapData:
 					result.append(newtile)
 		return result
 
-	def get_spawn(self, physicsbody):
-		location = (self.spawn[0], self.spawn[1]-physicsbody.heightintiles)
+	def get_spawn(self):
+		location = (self.spawn[0], self.spawn[1])
 		result = self.get_tile2pos(*location, offset=False)
 		return result
 
@@ -438,15 +438,19 @@ class MapData:
 		fin.close()
 		return spritebatch
 
-def update_physicsbodies(physicsbodies, geometry):
+def update_physicsbodies(entities, numentities, geometry):
 	# get all new rects by moving them and reconciling with collisions
 
 	# first, try assuming zero collisions and just move in direction of velocity
-	length = 0
 	new_rects = []
-	for pb in physicsbodies:
-		newrect = pb.rect.copy()
-		length += 1
+	for e in entities:
+
+		pb = e.physics
+		if (pb is None):
+			new_rects.append(None)
+			continue
+
+		newrect = pb.rect().copy()
 
 		# add all forces
 		sum_forces = sum_tuples(pb.forces)
@@ -480,8 +484,11 @@ def update_physicsbodies(physicsbodies, geometry):
 		pb.clearcollisions()
 
 	# if rect collides with geometry, clamp to nearest tile boundary
-	for ri in range(length):
+	for ri in range(numentities):
 		rect = new_rects[ri]
+		if (rect is None):
+			continue
+
 		tiles = geometry.get_tilesfromrect(rect)
 
 		if (len(tiles) > 0):
@@ -490,17 +497,17 @@ def update_physicsbodies(physicsbodies, geometry):
 
 			global highlight
 
-			pb = physicsbodies[ri]
+			pb = entities[ri].physics
 			pbdp = pb.dp
 			nearesttilepos = geometry.get_nearesttilepos(*pb.get_pos())
 
 			highlight.append((Rect(nearesttilepos, (TILE_WIDTH, TILE_WIDTH)), 'green'))
 
-			newrecth = pb.rect.copy()
+			newrecth = pb.rect().copy()
 			newrecth.x += pbdp[0] * PHYSICS_TIME_STEP
 			newrecth.y = nearesttilepos[1] # this makes you fall into corners??
 
-			newrectv = pb.rect.copy()
+			newrectv = pb.rect().copy()
 			newrectv.x = nearesttilepos[0] # this prevents getting caught on corners
 			newrectv.y += pbdp[1] * PHYSICS_TIME_STEP
 
@@ -534,7 +541,7 @@ def update_physicsbodies(physicsbodies, geometry):
 			if (pbdp[0] != 0 and pbdp[1] != 0 and not (vertcollide or horzcollide)):
 				# check if moving into the block or away from it
 				for tile in tiles:
-					diag_direction = (tile.x - pb.rect.x, tile.y - pb.rect.y)
+					diag_direction = (tile.x - pb.rect().x, tile.y - pb.rect().y)
 					if (sign(pbdp[0]) == sign(diag_direction[0])):
 						diag_tile = tile
 
@@ -542,18 +549,18 @@ def update_physicsbodies(physicsbodies, geometry):
 			if (not pb.get_collidesvert() and pb.get_collideshorz()):
 				newrectv.x = nearesttilepos[0]-sign(pbdp[0]) # nudge away from walls
 				new_rects[ri] = newrectv
-				physicsbodies[ri].dp = (0, pbdp[1])
+				entities[ri].physics.dp = (0, pbdp[1])
 
 			# floor and ceiling
 			elif (pb.get_collidesvert() and not pb.get_collideshorz()):
 				newrecth.y = nearesttilepos[1]
 				new_rects[ri] = newrecth
-				physicsbodies[ri].dp = (pbdp[0], 0)
+				entities[ri].physics.dp = (pbdp[0], 0)
 
 			# concave corner
 			elif (pb.get_collidesvert() and pb.get_collideshorz()):
 				new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
-				physicsbodies[ri].dp = (0, 0)
+				entities[ri].physics.dp = (0, 0)
 
 			# convex corner, basically perfect diagonal velocity
 			elif (not diag_tile is None and 
@@ -564,12 +571,12 @@ def update_physicsbodies(physicsbodies, geometry):
 					# if falling, continue falling
 					if (pbdp[1] > 0):
 						new_rects[ri] = Rect(nearesttilepos, pb.get_dim())
-						physicsbodies[ri].dp = (0, pbdp[1])
+						entities[ri].physics.dp = (0, pbdp[1])
 					# if rising, stop velocity
 					elif (pbdp[1] < 0):
 						newrecth.y = nearesttilepos[1]
 						new_rects[ri] = newrecth
-						physicsbodies[ri].dp = (0, 0)
+						entities[ri].physics.dp = (0, 0)
 				# corner is below
 				elif (diag_direction[1] > 0):
 					# if falling, check for the fat catch, otherwise hit like a wall
@@ -579,16 +586,16 @@ def update_physicsbodies(physicsbodies, geometry):
 							pb.collide_down()
 							highlight.append((tile, 'red'))
 							new_rects[ri] = newrecth
-							physicsbodies[ri].dp = (pbdp[0], 0)
+							entities[ri].physics.dp = (pbdp[0], 0)
 						else:
 							newrectv.x = nearesttilepos[0]
 							new_rects[ri] = newrectv
-							physicsbodies[ri].dp = (0, pbdp[1])
+							entities[ri].physics.dp = (0, pbdp[1])
 					# if rising, continue rising
 					elif (pbdp[1] < 0):
 						newrecth.y = nearesttilepos[1]
 						new_rects[ri] = newrecth
-						physicsbodies[ri].dp = (0, pbdp[1])
+						entities[ri].physics.dp = (0, pbdp[1])
 
 
 	# if rect collides with other physics bodies and is "solid", 
@@ -597,18 +604,20 @@ def update_physicsbodies(physicsbodies, geometry):
 	# if rect is collides with an attack, don't move
 
 	# resolve rects
-	for pbi in range(length):
-		physicsbodies[pbi].rect = new_rects[pbi]
+	for pbi in range(numentities):
+		entities[pbi].x = new_rects[pbi].x
+		entities[pbi].y = new_rects[pbi].y
 
 """
 NOTE: implementation of collision assumes all physics bodies have
 height and width as integer multiples of TILE_WIDTH
 """
 class PhysicsBody:
-	def __init__(self, pos=(0, 0), widthintiles=1, heightintiles=1, mass=1.0):
+	def __init__(self, widthintiles=1, heightintiles=1, mass=1.0):
+		self.entity = None
 		self.widthintiles = widthintiles
 		self.heightintiles = heightintiles
-		self.rect = Rect(pos, (float(widthintiles*TILE_WIDTH), float(heightintiles*TILE_WIDTH)))
+		self.dim = (float(widthintiles*TILE_WIDTH), float(heightintiles*TILE_WIDTH))
 		self.mass = mass
 		self.dp = (0, 0)
 		self.forces = []
@@ -617,16 +626,20 @@ class PhysicsBody:
 
 		self.collisions = [0]*4
 
+	def rect(self):
+		result = Rect((self.entity.x, self.entity.y), self.dim)
+		return result
+
 	def get_pos(self):
-		result = (self.rect.x, self.rect.y)
+		result = (self.entity.x, self.entity.y)
 		return result
 
 	def set_pos(self, pos):
-		self.rect.x = pos[0]
-		self.rect.y = pos[1]
+		self.entity.x = pos[0]
+		self.entity.y = pos[1]
 
 	def get_dim(self):
-		result = (self.rect.width, self.rect.height)
+		result = self.dim
 		return result
 
 	def clearforces(self):
@@ -670,21 +683,72 @@ class PhysicsBody:
 		result = (self.get_collideright() + self.get_collideleft() > 0)
 		return result
 
-class Player:
-	def __init__(self, spritebatch):
-		# draw stuff
-		self.spriteindex = spritebatch.add('tallknight', 'actor')
-		sprite = spritebatch.get(self.spriteindex)
-		width, height = sprite.tileswide, sprite.tilestall
+	def halt_vert_vel(self):
+		self.dp = (self.dp[0], 0.0)
 
-		# physics stuff
-		self.physicsbody = PhysicsBody(widthintiles=width, heightintiles=height)
+class EntityLoader:
+	def __init__(self, spritebatch):
+		fin = open('./data/entitydata.json')
+		self.entitydata = json.load(fin)
+		fin.close()
+
+		self.spritebatch = spritebatch
+
+	def create_entity(self, ename, position=(0,0)):
+		assert(ename in self.entitydata)
+
+		position = position
+
+		edata = self.entitydata[ename]
+
+		testnull = edata["testnull"]
+		spritedata = edata["spritedata"]
+		physicsdata = edata["physicsdata"]
+		playerenable = edata["player"]
+
+		spriteindex = None
+		if (not spritedata is None):
+			spriteindex = self.spritebatch.add(spritedata["spritename"], 'actor')
+
+		physics = None
+		if (not physicsdata is None):
+			physics = PhysicsBody(
+				widthintiles=int(physicsdata["width"]), 
+				heightintiles=int(physicsdata["height"]))
+			# push position up by heightintiles
+			position = (position[0], position[1]-(int(physicsdata["height"])*TILE_WIDTH))
+
+		player = None
+		if (not playerenable is None):
+			player = Player()
+
+		entity = Entity(position=position, spriteindex=spriteindex, physics=physics, player=player)
+		return entity
+
+class Entity:
+	def __init__(self, position=(0, 0), spriteindex=None, physics=None, player=None):
+		# common state vars
+		self.x, self.y = position
+		self.spriteindex = spriteindex
+		self.facing_direction = 1 # TODO: encode starting facing dir in spawn_loc on map
+
+		# components
+		self.physics = physics
+		if (not self.physics is None):
+			self.physics.entity = self
+
+		self.player = player
+		if (not self.player is None):
+			self.player.entity = self
+
+class Player:
+	def __init__(self):
+		self.entity = None
+
+		# movement input stuff
 		self.jumps_remaining = 0
 		self.jump_timer = 0.0
 		self.fall_timer = 0
-
-		# state stuff
-		self.facing_direction = 1 # start facing right? Maybe encoded in spawn location on map?
 
 		# magic stuff
 		self.max_mana = 6
@@ -694,34 +758,30 @@ class Player:
 		self.time_until_recover_mana = 3.0
 		self.time_remaining_to_recover = self.time_until_recover_mana
 
-		self.magic_soul = E_FIRE#E_WIND
+		self.magic_soul = E_FIRE
 		self.magic_body = E_FIRE
 		self.magic_mind = E_FIRE
 
-		# spell chain breaks when mana begins recovering
 		self.last_element = -1
 
 	def get_pos(self):
-		result = self.physicsbody.get_pos()
+		result = self.entity.physics.get_pos()
 		return result
 
 	def set_pos(self, pos):
-		self.physicsbody.set_pos(pos)
-
-	def halt_vert_vel(self):
-		self.physicsbody.dp = (self.physicsbody.dp[0], 0.0)
+		self.entity.physics.set_pos(pos)
 
 def player_update(player):
 	# add physics forces (movement force handled in input handling)
 	gravity = (0, GRAVITY_ACCEL)
-	player.physicsbody.addforce(gravity)
+	player.entity.physics.addforce(gravity)
 
 	# apply friction
 	fric = (
-		-1*sign(player.physicsbody.dp[0])*(player.physicsbody.dp[0]**2)*HORZ_FRIC, 
-		-1*sign(player.physicsbody.dp[1])*(player.physicsbody.dp[1]**2)*VERT_FRIC
+		-1*sign(player.entity.physics.dp[0])*(player.entity.physics.dp[0]**2)*HORZ_FRIC, 
+		-1*sign(player.entity.physics.dp[1])*(player.entity.physics.dp[1]**2)*VERT_FRIC
 	)
-	player.physicsbody.addforce(fric)
+	player.entity.physics.addforce(fric)
 
 	# jumping logic
 	# anything less than max jumps guarantees no coyote-time
@@ -730,7 +790,7 @@ def player_update(player):
 
 		# cooldown should never prevent jumping from ground, only double jumping
 		if (player.jump_timer >= JUMP_COOLDOWN_SEC):
-			if (player.physicsbody.get_collidedown()):
+			if (player.entity.physics.get_collidedown()):
 				# reset jump timer when you hit the ground
 				if (player.magic_soul == E_WIND):
 					player.jumps_remaining = 2
@@ -742,7 +802,7 @@ def player_update(player):
 			player.jump_timer += PHYSICS_TIME_STEP
 
 	# coyote time only occurs at max jumps (walking off a surface)
-	elif (not player.physicsbody.get_collidedown()):
+	elif (not player.entity.physics.get_collidedown()):
 		player.fall_timer += 1 # depends on FPS
 		if (player.fall_timer >= COYOTE_FRAMES):
 			if (player.magic_soul == E_WIND):
@@ -761,7 +821,7 @@ def player_update(player):
 				player.curr_mana += 1
 				return '+'
 
-def player_handleinput(player, inputdata):
+def player_handleinput(playerentity, inputdata):
 	output = []
 
 	movedir = inputdata.get_var(InputDataIndex.MOVE_DIR)
@@ -772,25 +832,25 @@ def player_handleinput(player, inputdata):
 	if (movedir == InputMoveDir.LEFT or 
 		movedir == InputMoveDir.UP_LEFT or 
 		movedir == InputMoveDir.DOWN_LEFT):
-		player.facing_direction = -1
+		playerentity.facing_direction = -1
 		force = (-SIDEWAYS_ACCEL, 0)
-		player.physicsbody.addforce(force)
+		playerentity.physics.addforce(force)
 	elif (movedir == InputMoveDir.RIGHT or 
 		movedir == InputMoveDir.UP_RIGHT or 
 		movedir == InputMoveDir.DOWN_RIGHT):
-		player.facing_direction = 1
+		playerentity.facing_direction = 1
 		force = (SIDEWAYS_ACCEL, 0)
-		player.physicsbody.addforce(force)
+		playerentity.physics.addforce(force)
 
 	# jumping & long jumping
-	if (jump and player.jumps_remaining > 0):
+	if (jump and playerentity.player.jumps_remaining > 0):
 		if (False):#player.sliding):
 			pass
 		else:
-			player.halt_vert_vel()
+			playerentity.physics.halt_vert_vel()
 			force = (0, -JUMP_ACCEL)
-			player.physicsbody.addforce(force)
-			player.jumps_remaining -= 1
+			playerentity.physics.addforce(force)
+			playerentity.player.jumps_remaining -= 1
 
 	# dodging
 
@@ -836,7 +896,7 @@ class InputDataBuffer:
 		for inputtype in InputDataIndex:
 			self.vars.append([])
 
-	def newinput(self):
+	def newinput(self, curr_input, prev_input):
 		if (self.queuelength == self.maxqueuelength):
 			for varlist in self.vars:
 				varlist.pop(0)
@@ -846,6 +906,69 @@ class InputDataBuffer:
 		# put in default values
 		for varlist in self.vars:
 			varlist.append(0)
+
+		# movement
+		moveinputvecx, moveinputvecy = (0, 0)
+
+		# keyboard directions
+		if pygame.K_LEFT in curr_input:
+			moveinputvecx += -1
+		if pygame.K_RIGHT in curr_input:
+			moveinputvecx += 1
+		if pygame.K_DOWN in curr_input:
+			moveinputvecy += 1
+		if pygame.K_UP in curr_input:
+			moveinputvecy += -1
+
+		# discrete thumbstick/keyboard directions
+		if moveinputvecx > 0:
+			slope = moveinputvecy/moveinputvecx
+			if (slope < -2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				self.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > -2.41 and slope < -0.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_RIGHT)
+				self.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > -0.41 and slope < 0.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.RIGHT)
+			elif (slope > 0.41 and slope < 2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_RIGHT)
+			elif (slope > 2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+		elif moveinputvecx < 0:
+			slope = moveinputvecy/moveinputvecx
+			if (slope < -2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+			elif (slope > -2.41 and slope < -0.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_LEFT)
+			elif (slope > -0.41 and slope < 0.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.LEFT)
+			elif (slope > 0.41 and slope < 2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_LEFT)
+				self.set_var(InputDataIndex.DUCK, 1)
+			elif (slope > 2.41):
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				self.set_var(InputDataIndex.DUCK, 1)
+		else:
+			if moveinputvecy > 0:
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
+				self.set_var(InputDataIndex.DUCK, 1)
+			elif moveinputvecy < 0:
+				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
+		
+		# jumping & dodging
+		if pygame.K_SPACE in curr_input and not pygame.K_SPACE in prev_input:
+			self.set_var(InputDataIndex.JUMP, 1)
+		if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
+			self.set_var(InputDataIndex.DODGE, 1)
+
+		# guarding and attacks (& spells)
+		if pygame.K_g in curr_input and not pygame.K_g in prev_input:
+			self.set_var(InputDataIndex.GUARD, 1)
+		if pygame.K_f in curr_input and not pygame.K_f in prev_input:
+			self.set_var(InputDataIndex.LIGHT_ATK, 1)
+		if pygame.K_d in curr_input and not pygame.K_d in prev_input:
+			self.set_var(InputDataIndex.HEAVY_ATK, 1)
 
 	def set_var(self, var_idi, val):
 		self.vars[var_idi][self.queuelength-1] = val
@@ -969,6 +1092,22 @@ class SpriteBatch:
 
 		return result
 
+# use for multiplayer
+class WorldState:
+	def __init__(self):
+		self.numentities = 0
+		self.entities = []
+
+	def load_ws(self, serialized_world):
+		pass
+
+	def serialize(self):
+		pass
+
+	def add_entity(self, e):
+		self.entities.append(e)
+		self.numentities += 1
+
 
 def main():
 	pygame.init()
@@ -981,34 +1120,26 @@ def main():
 	done = False
 	clock = pygame.time.Clock()
 
-	# cache structure for all sprite flyweights
+	# load data
 	spritebatch = SpriteBatch()
+	entityloader = EntityLoader(spritebatch)
 
 	# input stuff
 	pygame.joystick.init()
-
-	# player stuff
-	player = Player(spritebatch)
-
-	# input stuff
 	prev_input = []
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
 
-	# DEBUGGING
-	filename = 'widemap'
+	# world state
+	worldstate = WorldState()
 
-	# Load in the test map
+	# geometry never changes, so no need to be in worldstate
 	geometry = MapData()
-	geometry.load(filename, spritebatch)
-	player.set_pos(geometry.get_spawn(player.physicsbody))
+	geometry.load("widemap", spritebatch)
 
-	# physics
-	physicsbodies = [player.physicsbody]
-
-
-	# load images
-	playerimg = pygame.image.load('./res/actors/player/knight01.png')
+	# add player
+	player = entityloader.create_entity("player-local", position=geometry.get_spawn())
+	worldstate.add_entity(player)
 
 	# load fonts
 	font = pygame.font.Font('./data/fonts/ARI.ttf', 32)
@@ -1031,8 +1162,6 @@ def main():
 		# display FPS
 		fps_text = font.render(str(int(clock.get_fps())), 0, red)
 
-		output = []
-
 		global highlight
 		highlight.clear()
 
@@ -1043,7 +1172,7 @@ def main():
 
 			# poll input, put in curr_input and prev_input
 			prev_input = curr_input[:]
-			inputdata.newinput()
+			
 			for event in pygame.event.get(): # User did something.
 				if event.type == pygame.QUIT: # If user clicked close.
 					done = True # Flag that we are done so we exit this loop.
@@ -1055,98 +1184,27 @@ def main():
 					if event.key in curr_input:
 						curr_input.remove(event.key)
 
-			def f():
-				return '~~~~~~~~~~~~~~'
-			debug_func = f
-
 			# keypad handle input
 			if pygame.K_ESCAPE in curr_input:
 				done = True
-			if pygame.K_SPACE in curr_input and pygame.K_SPACE not in prev_input:
-				#output.append(debug_func())
-				pass
 
-			# movement
-			moveinputvecx, moveinputvecy = (0, 0)
+			inputdata.newinput(curr_input, prev_input)
 
-			# keyboard directions
-			if pygame.K_LEFT in curr_input:
-				moveinputvecx += -1
-			if pygame.K_RIGHT in curr_input:
-				moveinputvecx += 1
-			if pygame.K_DOWN in curr_input:
-				moveinputvecy += 1
-			if pygame.K_UP in curr_input:
-				moveinputvecy += -1
-
-			# discrete thumbstick/keyboard directions
-			if moveinputvecx > 0:
-				slope = moveinputvecy/moveinputvecx
-				if (slope < -2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-					inputdata.set_var(InputDataIndex.DUCK, 1)
-				elif (slope > -2.41 and slope < -0.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_RIGHT)
-					inputdata.set_var(InputDataIndex.DUCK, 1)
-				elif (slope > -0.41 and slope < 0.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.RIGHT)
-				elif (slope > 0.41 and slope < 2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_RIGHT)
-				elif (slope > 2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-			elif moveinputvecx < 0:
-				slope = moveinputvecy/moveinputvecx
-				if (slope < -2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-				elif (slope > -2.41 and slope < -0.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP_LEFT)
-				elif (slope > -0.41 and slope < 0.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.LEFT)
-				elif (slope > 0.41 and slope < 2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN_LEFT)
-					inputdata.set_var(InputDataIndex.DUCK, 1)
-				elif (slope > 2.41):
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-					inputdata.set_var(InputDataIndex.DUCK, 1)
-			else:
-				if moveinputvecy > 0:
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.DOWN)
-					inputdata.set_var(InputDataIndex.DUCK, 1)
-				elif moveinputvecy < 0:
-					inputdata.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-			
-			# jumping & dodging
-			if pygame.K_SPACE in curr_input and not pygame.K_SPACE in prev_input:
-				inputdata.set_var(InputDataIndex.JUMP, 1)
-			if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
-				inputdata.set_var(InputDataIndex.DODGE, 1)
-
-			# guarding and attacks (& spells)
-			if pygame.K_g in curr_input and not pygame.K_g in prev_input:
-				inputdata.set_var(InputDataIndex.GUARD, 1)
-			if pygame.K_f in curr_input and not pygame.K_f in prev_input:
-				inputdata.set_var(InputDataIndex.LIGHT_ATK, 1)
-			if pygame.K_d in curr_input and not pygame.K_d in prev_input:
-				inputdata.set_var(InputDataIndex.HEAVY_ATK, 1)
-
-			output.extend(player_handleinput(player, inputdata))
+			# update player state/forces by reading inputdata structure
+			player_handleinput(player, inputdata)
 
 			# physics and logic updates
-			output.append(player_update(player))
+			player_update(player.player)
 
-			update_physicsbodies(physicsbodies, geometry)
+			update_physicsbodies(worldstate.entities, worldstate.numentities, geometry)
 
-			camera.update_pos(player)
+			camera.update_pos(player.physics)
 
 		# handle AI less often than physics?
 		#megabrain.update()
 
 		# start drawing
 		screen.fill(grey)
-
-		for line in output:
-			if (not line is None):
-				print(line)
 
 		# get camera maptile range
 		camerabounds = camera.get_maptilebounds(geometry)
@@ -1189,8 +1247,8 @@ def main():
 		blitlist.clear()
 
 		# draw player
-		playerpos = player.physicsbody.get_pos()
-		playerrect = Rect(playerpos, player.physicsbody.get_dim())
+		playerpos = (player.x, player.y)
+		playerrect = player.physics.rect()
 		playerrect = camera.get_screenrect(playerrect)
 		playerblit = spritebatch.draw(
 			screen, player.spriteindex, playerrect, fliphorz=(player.facing_direction <= 0))
