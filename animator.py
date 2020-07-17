@@ -160,7 +160,7 @@ class EntityLoader:
 		return entity
 
 class Entity:
-	def __init__(self, position=(0, 0), spriteindex=None, physics=None, player=None):
+	def __init__(self, position=(0, 0), spriteindex=None, physics=None, animator=None, player=None):
 		# common state vars
 		self.x, self.y = position
 		self.spriteindex = spriteindex
@@ -174,6 +174,19 @@ class Entity:
 		self.player = player
 		if (not self.player is None):
 			self.player.entity = self
+
+		self.animator = animator
+		if (not self.animator is None):
+			self.animator.entity = self
+
+	def draw(self, camera, sb):
+		if (self.animator is None):
+			rect = self.physics.rect()
+			rect = camera.get_screenrect(rect)
+			blit = sb.draw(screen, self.spriteindex, rect, fliphorz=(self.facing_direction <= 0))
+			return blit
+		else:
+
 
 class InputMoveDir(IntEnum):
 	NONE = 0
@@ -343,7 +356,7 @@ class SpriteBatch:
 		# check numloadedmapsusing -- if zero, then unload
 		pass
 
-	def draw(self, screen, spriteindex, rect, fliphorz=False):
+	def draw(self, screen, spriteindex, rect, rotate=None, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 		# scale image to the rect (already zoomed)
 		scale = (int(rect.width), int(rect.height))
@@ -358,6 +371,50 @@ class SpriteBatch:
 			result = (image, rect.get_pyrect())
 
 		return result
+
+	def draw_rotate(self, screen, spriteindex, rect, degrees, fliphorz=False):
+		image = self.sprites[spriteindex].get_image()
+
+		# scale image to the rect (already zoomed)
+		scale = (int(rect.width), int(rect.height))
+		image = pygame.transform.scale(image, scale)
+
+		# rotate image
+		image = pygame.transform.rotate(image, degrees)
+
+		result = None
+
+		if (fliphorz):
+			image = pygame.transform.flip(image, True, False)
+			result = (image, rect.get_pyrect())
+		else:
+			result = (image, rect.get_pyrect())
+
+		return result
+
+class Animator:
+	def __init__(self):
+		self.entity = None
+
+		# should the bone sprites go here?
+
+class Animation:
+	def __init__(self):
+		self.numbones = 0
+		self.bonesprites = []
+		self.numframes = 1
+		self.framepos = [][]
+		self.framerot = [][]
+
+	def add_frame(self):
+		framepos = [(0, 0)] * self.numbones
+		self.framepos.append(framepos)
+		framerot = [0] * self.numbones
+		self.framerot.append(framerot)
+		self.numframes += 1
+
+
+
 
 def main():
 	pygame.init()
