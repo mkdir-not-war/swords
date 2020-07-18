@@ -398,6 +398,9 @@ class Animator:
 
 		# should the bone sprites go here?
 
+	def load(self, entityname):
+		pass
+
 class Animation:
 	def __init__(self):
 		self.numbones = 0

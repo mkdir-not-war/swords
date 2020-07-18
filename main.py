@@ -896,7 +896,32 @@ class InputDataBuffer:
 		for inputtype in InputDataIndex:
 			self.vars.append([])
 
-	def newinput(self, curr_input, prev_input):
+	''' 
+	~ joystick event info ~
+	JOYAXISMOTION     joy, axis, value
+	JOYBALLMOTION     joy, ball, rel
+	JOYHATMOTION      joy, hat, value
+	JOYBUTTONUP       joy, button
+	JOYBUTTONDOWN     joy, button
+	'''
+
+	def checkprevkey(self, prev_input, key):
+		result = True
+		for p_event in prev_input:
+			if (p_event.type == pygame.KEYDOWN):
+				if (p_event.key == key):
+					result = False
+		return result
+
+	def checkprevbutton(self, prev_input, button):
+		result = True
+		for p_event in prev_input:
+			if (p_event.type == pygame.JOYBUTTONDOWN):
+				if (p_event.button == button):
+					result = False
+		return result
+
+	def newinput(self, joystick, curr_input, prev_input):
 		if (self.queuelength == self.maxqueuelength):
 			for varlist in self.vars:
 				varlist.pop(0)
@@ -910,15 +935,51 @@ class InputDataBuffer:
 		# movement
 		moveinputvecx, moveinputvecy = (0, 0)
 
-		# keyboard directions
-		if pygame.K_LEFT in curr_input:
-			moveinputvecx += -1
-		if pygame.K_RIGHT in curr_input:
-			moveinputvecx += 1
-		if pygame.K_DOWN in curr_input:
-			moveinputvecy += 1
-		if pygame.K_UP in curr_input:
-			moveinputvecy += -1
+		# check out current input events
+		for event in curr_input:
+			# keyboard directions
+			if (event.type == pygame.KEYDOWN):
+				if event.key == pygame.K_LEFT:
+					moveinputvecx += -1
+				if event.key == pygame.K_RIGHT:
+					moveinputvecx += 1
+				if event.key == pygame.K_DOWN:
+					moveinputvecy += 1
+				if event.key == pygame.K_UP:
+					moveinputvecy += -1
+
+			# joystick directions
+			if (event.type == pygame.JOYAXISMOTION):
+				pass
+			if (event.type == pygame.JOYHATMOTION):
+				if event.hat == 0:
+					# haven't checked whether y-value is good on this
+					moveinputvecx, moveinputvecy = event.value
+
+			# more keyboard actions
+			if (event.type == pygame.KEYDOWN):
+				# jumping & dodging
+				if event.key == pygame.K_SPACE:
+					if self.checkprevkey(prev_input, event.key):
+						self.set_var(InputDataIndex.JUMP, 1)
+				if event.key == pygame.K_LSHIFT:
+					if self.checkprevkey(prev_input, event.key):
+						self.set_var(InputDataIndex.DODGE, 1)
+
+				# guarding and attacks (& spells)
+				if event.key == pygame.K_g:
+					if self.checkprevkey(prev_input, event.key):
+						self.set_var(InputDataIndex.GUARD, 1)
+				if event.key == pygame.K_f:
+					if self.checkprevkey(prev_input, event.key):
+						self.set_var(InputDataIndex.LIGHT_ATK, 1)
+
+			# more joystick actions
+			if (event.type == pygame.JOYBUTTONDOWN):
+				# jumping & dodging
+				if event.button == 0:
+					if self.checkprevbutton(prev_input, event.button):
+						self.set_var(InputDataIndex.JUMP, 1)
 
 		# discrete thumbstick/keyboard directions
 		if moveinputvecx > 0:
@@ -955,20 +1016,6 @@ class InputDataBuffer:
 				self.set_var(InputDataIndex.DUCK, 1)
 			elif moveinputvecy < 0:
 				self.set_var(InputDataIndex.MOVE_DIR, InputMoveDir.UP)
-		
-		# jumping & dodging
-		if pygame.K_SPACE in curr_input and not pygame.K_SPACE in prev_input:
-			self.set_var(InputDataIndex.JUMP, 1)
-		if pygame.K_LSHIFT in curr_input and not pygame.K_LSHIFT in prev_input:
-			self.set_var(InputDataIndex.DODGE, 1)
-
-		# guarding and attacks (& spells)
-		if pygame.K_g in curr_input and not pygame.K_g in prev_input:
-			self.set_var(InputDataIndex.GUARD, 1)
-		if pygame.K_f in curr_input and not pygame.K_f in prev_input:
-			self.set_var(InputDataIndex.LIGHT_ATK, 1)
-		if pygame.K_d in curr_input and not pygame.K_d in prev_input:
-			self.set_var(InputDataIndex.HEAVY_ATK, 1)
 
 	def set_var(self, var_idi, val):
 		self.vars[var_idi][self.queuelength-1] = val
@@ -1125,10 +1172,11 @@ def main():
 	entityloader = EntityLoader(spritebatch)
 
 	# input stuff
-	pygame.joystick.init()
 	prev_input = []
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
+	joystick = pygame.joystick.Joystick(0) # 0 -> player 1
+	joystick.init()	
 
 	# world state
 	worldstate = WorldState()
@@ -1172,23 +1220,52 @@ def main():
 
 			# poll input, put in curr_input and prev_input
 			prev_input = curr_input[:]
-			
-			for event in pygame.event.get(): # User did something.
-				if event.type == pygame.QUIT: # If user clicked close.
-					done = True # Flag that we are done so we exit this loop.
-				elif event.type == pygame.JOYBUTTONDOWN:
-					print("Joystick button pressed.")
-				elif event.type == pygame.KEYDOWN:
-					curr_input.append(event.key)
-				elif event.type == pygame.KEYUP:
-					if event.key in curr_input:
-						curr_input.remove(event.key)
+			events = pygame.event.get()
 
-			# keypad handle input
-			if pygame.K_ESCAPE in curr_input:
-				done = True
+			# add values to curr_input on input
+			for event in events:
+				if event.type == pygame.QUIT:
+					done = True
+				elif (event.type == pygame.JOYBUTTONDOWN or
+					event.type == pygame.KEYDOWN):
+					curr_input.append(event)
 
-			inputdata.newinput(curr_input, prev_input)
+				# if new axis/hat, then remove previous (if any) from curr_input
+				elif (event.type == pygame.JOYAXISMOTION or
+					event.type == pygame.JOYHATMOTION):
+					for cev in curr_input:
+						if (event.type == cev.type):
+							curr_input.remove(cev)
+					if (event.value != (0, 0)):
+						curr_input.append(event)
+
+			# remove values from curr_input on release of input
+			for r_event in events:
+				if (r_event.type == pygame.JOYBUTTONUP):
+					for event in curr_input:
+						if (event.type == pygame.JOYBUTTONDOWN and
+							event.button == r_event.button):
+							curr_input.remove(event)
+							break
+				elif (r_event.type == pygame.KEYUP):
+					for event in curr_input:
+						if (event.type == pygame.KEYDOWN and 
+							event.key == r_event.key):
+							curr_input.remove(event)
+							break
+
+			# skip update and quit if directed
+			for event in curr_input:
+				if (event.type == pygame.KEYDOWN and
+					event.key == pygame.K_ESCAPE):
+					done = True
+				elif (event.type == pygame.JOYBUTTONDOWN and
+					event.button == 6):
+					done = True
+			if (done):
+				break
+
+			inputdata.newinput(joystick, curr_input, prev_input)
 
 			# update player state/forces by reading inputdata structure
 			player_handleinput(player, inputdata)
