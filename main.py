@@ -5,7 +5,6 @@ import json
 
 # constants
 TILE_WIDTH = 16
-MAXINPUTQUEUELEN = 10
 
 # time
 PHYSICS_TIME_STEP = 1.0/100
@@ -38,6 +37,10 @@ GRAVITY_ACCEL = 64
 SIDEWAYS_ACCEL = 245
 JUMP_ACCEL = 5020
 JUMP_COOLDOWN_SEC = 0.2
+
+# input constants
+MAXINPUTQUEUELEN = 10
+HOLDBUTTONTIMESHORT = 10 * 1/60.0
 
 # fudge factors
 VEL_CLAMTOZERO_RANGE = 5.0
@@ -749,6 +752,11 @@ class Player:
 		self.jumps_remaining = 0
 		self.jump_timer = 0.0
 		self.fall_timer = 0
+		self.attack_timer = 0
+
+		self.prevjump = False
+		self.prevatk = False
+		self.atkexecuted = False
 
 		# magic stuff
 		self.max_mana = 6
@@ -824,9 +832,14 @@ def player_update(player):
 def player_handleinput(playerentity, inputdata):
 	output = []
 
+	player = playerentity.player
+
+	# and get current stuff
 	movedir = inputdata.get_var(InputDataIndex.MOVE_DIR)
 	jump = (inputdata.get_var(InputDataIndex.JUMP) > 0)
-	recent_jump = inputdata.had_var(InputDataIndex.JUMP, 1, frames=EARLYJUMP_FRAMES)
+	attack = (inputdata.get_var(InputDataIndex.ATTACK) > 0)
+
+	uniquejumppress = (jump and not player.prevjump)
 
 	# move left and right
 	if (movedir == InputMoveDir.LEFT or 
@@ -843,7 +856,7 @@ def player_handleinput(playerentity, inputdata):
 		playerentity.physics.addforce(force)
 
 	# jumping & long jumping
-	if (jump and playerentity.player.jumps_remaining > 0):
+	if (uniquejumppress and player.jumps_remaining > 0):
 		if (False):#player.sliding):
 			pass
 		else:
@@ -851,6 +864,29 @@ def player_handleinput(playerentity, inputdata):
 			force = (0, -JUMP_ACCEL)
 			playerentity.physics.addforce(force)
 			playerentity.player.jumps_remaining -= 1
+
+	# attacking
+	if (attack and not player.prevatk):
+			# start attack on new button press
+			playerentity.player.atkexecuted = False
+			playerentity.player.attack_timer = 0.0
+			print("winding up attack")
+	elif (playerentity.player.attack_timer > HOLDBUTTONTIMESHORT and 
+		not player.atkexecuted):
+		# after holding the button sufficiently long, transition to heavy attack
+		playerentity.player.atkexecuted = True
+		print("heavy attack")
+		print()
+	elif (player.prevatk and not attack):
+		if (player.attack_timer < HOLDBUTTONTIMESHORT):
+			# on button release before hold, transition to light attack
+			playerentity.player.atkexecuted = True
+			print("light attack")
+			print()	
+
+	if (player.prevatk and not player.atkexecuted):
+		playerentity.player.attack_timer += PHYSICS_TIME_STEP
+			
 
 	# dodging
 
@@ -861,6 +897,10 @@ def player_handleinput(playerentity, inputdata):
 	DOWN -> DOWN_DIR -> DIR -> ATTACK
 	UP -> UP_DIR -> DIR -> ATTACK
 	'''
+
+	# set prev inputs
+	playerentity.player.prevjump = jump
+	playerentity.player.prevatk = attack
 
 	return output
 
@@ -879,15 +919,10 @@ class InputDataIndex(IntEnum):
 	MOVE_DIR = 0
 	DUCK = 1
 	JUMP = 2
-	LIGHT_ATK = 3
-	HEAVY_ATK = 4
-	DODGE = 5
-	ACTIVATE = 6
-	GUARD = 7
+	ATTACK = 3
 
 class InputDataBuffer:
 	def __init__(self):
-		self.maxqueuelength = MAXINPUTQUEUELEN
 		self.queuelength = 0
 
 		self.vars = []
@@ -905,24 +940,8 @@ class InputDataBuffer:
 	JOYBUTTONDOWN     joy, button
 	'''
 
-	def checkprevkey(self, prev_input, key):
-		result = True
-		for p_event in prev_input:
-			if (p_event.type == pygame.KEYDOWN):
-				if (p_event.key == key):
-					result = False
-		return result
-
-	def checkprevbutton(self, prev_input, button):
-		result = True
-		for p_event in prev_input:
-			if (p_event.type == pygame.JOYBUTTONDOWN):
-				if (p_event.button == button):
-					result = False
-		return result
-
-	def newinput(self, joystick, curr_input, prev_input):
-		if (self.queuelength == self.maxqueuelength):
+	def newinput(self, curr_input):
+		if (self.queuelength == MAXINPUTQUEUELEN):
 			for varlist in self.vars:
 				varlist.pop(0)
 		else:
@@ -956,30 +975,24 @@ class InputDataBuffer:
 					# haven't checked whether y-value is good on this
 					moveinputvecx, moveinputvecy = event.value
 
-			# more keyboard actions
 			if (event.type == pygame.KEYDOWN):
-				# jumping & dodging
+				# jumping
 				if event.key == pygame.K_SPACE:
-					if self.checkprevkey(prev_input, event.key):
-						self.set_var(InputDataIndex.JUMP, 1)
-				if event.key == pygame.K_LSHIFT:
-					if self.checkprevkey(prev_input, event.key):
-						self.set_var(InputDataIndex.DODGE, 1)
+					self.set_var(InputDataIndex.JUMP, 1)
 
-				# guarding and attacks (& spells)
+				# guarding & attacking
+				'''
 				if event.key == pygame.K_g:
-					if self.checkprevkey(prev_input, event.key):
-						self.set_var(InputDataIndex.GUARD, 1)
+					self.set_var(InputDataIndex.GUARD, 1)
+				'''
 				if event.key == pygame.K_f:
-					if self.checkprevkey(prev_input, event.key):
-						self.set_var(InputDataIndex.LIGHT_ATK, 1)
+					self.set_var(InputDataIndex.ATTACK, 1)
 
 			# more joystick actions
 			if (event.type == pygame.JOYBUTTONDOWN):
 				# jumping & dodging
 				if event.button == 0:
-					if self.checkprevbutton(prev_input, event.button):
-						self.set_var(InputDataIndex.JUMP, 1)
+					self.set_var(InputDataIndex.JUMP, 1)
 
 		# discrete thumbstick/keyboard directions
 		if moveinputvecx > 0:
@@ -1023,17 +1036,6 @@ class InputDataBuffer:
 
 	def get_var(self, var_idi):
 		result = self.vars[var_idi][self.queuelength-1]
-		return result
-
-	def had_var(self, var_idi, val, frames=MAXINPUTQUEUELEN):
-		assert(frames > 0)
-		frame = self.queuelength-1
-		result = False
-		while (frame >= 0 and frame >= self.queuelength-frames):
-			if (self.vars[var_idi][frame] == val):
-				result = True
-				return result
-			frame -= 1
 		return result
 
 class SpriteSheet:
@@ -1175,8 +1177,12 @@ def main():
 	prev_input = []
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
-	joystick = pygame.joystick.Joystick(0) # 0 -> player 1
-	joystick.init()	
+
+	num_joysticks = pygame.joystick.get_count()
+	joystick = None
+	if num_joysticks > 0:
+		joystick = pygame.joystick.Joystick(0) # 0 -> player 1
+		joystick.init()	
 
 	# world state
 	worldstate = WorldState()
@@ -1219,7 +1225,6 @@ def main():
 			t += PHYSICS_TIME_STEP
 
 			# poll input, put in curr_input and prev_input
-			prev_input = curr_input[:]
 			events = pygame.event.get()
 
 			# add values to curr_input on input
@@ -1265,7 +1270,7 @@ def main():
 			if (done):
 				break
 
-			inputdata.newinput(joystick, curr_input, prev_input)
+			inputdata.newinput(curr_input)
 
 			# update player state/forces by reading inputdata structure
 			player_handleinput(player, inputdata)
