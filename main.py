@@ -14,8 +14,9 @@ ZOOM_MULT = 2.2
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
 SCREENPERCENTABOVEPLAYER = 0.62
+SCREENPERCENTFACINGDIR = 0.54
 CAM_PLAYER_YOFF = int(CAMERA_HEIGHT/ZOOM_MULT*SCREENPERCENTABOVEPLAYER)
-CAM_PLAYER_XOFF = int(CAMERA_WIDTH/ZOOM_MULT/2)
+CAM_PLAYER_XOFF = int(CAMERA_WIDTH/ZOOM_MULT*SCREENPERCENTFACINGDIR)
 
 ''' 
 # physics @ PHYSICS_TIME_STEP = 1/60
@@ -201,7 +202,7 @@ class Camera:
 		if (ywidth > screendim[0]):
 			width = screendim[0]
 			height = width//ASPECT_RATIO_YX
-			y_off = (screendim[1] - height) * SCREENPERCENTABOVEPLAYER
+			y_off = (screendim[1] - height)//2
 		else:
 			height = screendim[1]
 			width = height*ASPECT_RATIO_YX
@@ -228,19 +229,23 @@ class Camera:
 		playerpos = playerphysics.get_pos()
 		pwidth, pheight = playerphysics.get_dim()
 		newposx, newposy = prevpos
+		facingdir = playerphysics.entity.facing_direction
+
+		camplayerxoff_facing = int(CAMERA_WIDTH/ZOOM_MULT*(1.0-SCREENPERCENTFACINGDIR))
+		if (facingdir < 0):
+			camplayerxoff_facing = CAM_PLAYER_XOFF
 
 		mincammove = int(TILE_WIDTH*0.06)#*ZOOM?
 		cameramoveyboundspercent = 0.15
-		camerasmoothmovespeed = 0.06 # percent of delta-y
+		camerasmoothmovespeedy = 0.05 # percent of delta-y
+		camerasmoothmovespeedx = 0.10 # percent of delta-x
 
 		# only retarget y-position when player out of map range, or grounded
-		if (prevpos[1] != (playerpos[1] - CAM_PLAYER_YOFF + pheight//2)):
-			ydiff = (playerpos[1] - CAM_PLAYER_YOFF + pheight//2) - prevpos[1]
+		if (prevpos[1] != (playerpos[1] + pheight//2 - CAM_PLAYER_YOFF)):
+			ydiff = (playerpos[1] + pheight//2 - CAM_PLAYER_YOFF) - prevpos[1]
 
 			yboundsmin = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*cameramoveyboundspercent
 			yboundsmax = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*(1.0-cameramoveyboundspercent)
-
-			#print(yboundsmin, yboundsmax, playerpos[1], playerpos[1]+pheight)
 
 			if (playerpos[1]+pheight > yboundsmax or
 				playerpos[1] < yboundsmin or
@@ -249,17 +254,26 @@ class Camera:
 				if (abs(ydiff) < mincammove):
 					newposy += ydiff
 				else:
-					ydeltamove = int(ydiff * camerasmoothmovespeed)
+					ydeltamove = int(ydiff * camerasmoothmovespeedy)
 					if (abs(ydeltamove) < mincammove):
 						ydeltamove = mincammove * sign(ydeltamove)
 
 					newposy += ydeltamove
 
-		# TODO: only retarget x-position if camera doesn't go off the map
-		if (prevpos[0] != (playerpos[0] - CAM_PLAYER_XOFF + pwidth//2)):
+		# target x-pos to bias facing direction
+		if (prevpos[0] != (playerpos[0] + pwidth//2 - camplayerxoff_facing)):
 
-			xdeltamove = (playerpos[0] - CAM_PLAYER_XOFF + pwidth//2) - prevpos[0]
-			newposx += xdeltamove
+			xdiff = (playerpos[0] + pwidth//2 - camplayerxoff_facing) - prevpos[0]
+
+			if (abs(xdiff) < mincammove):
+				newposx += xdiff
+			else:
+				xdeltamove = int(xdiff * camerasmoothmovespeedx)
+				if (abs(xdeltamove) < mincammove):
+					xdeltamove = mincammove * sign(xdeltamove)
+
+				newposx += xdeltamove
+
 
 		self.pos = (newposx, newposy)
 
@@ -317,17 +331,6 @@ class Camera:
 		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
 
 		return result
-
-	'''
-	def get_mousemoverect(self):
-		borderdistx = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.width
-		borderdisty = (1.0-MOUSE_MOVE_BORDER_MULT)/2 * self.height
-		result = Rect(
-			(self.x_offset + borderdistx, self.y_offset + borderdisty),
-			(self.width * MOUSE_MOVE_BORDER_MULT, self.height * MOUSE_MOVE_BORDER_MULT)
-		)
-		return result
-	'''
 
 	def update_window(self):
 		surface = pygame.display.get_surface()
