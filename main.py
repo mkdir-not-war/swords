@@ -230,19 +230,22 @@ class Camera:
 		newposx, newposy = prevpos
 
 		mincammove = int(TILE_WIDTH*0.06)#*ZOOM?
-		cameramoveyboundspercent = 0.2
+		cameramoveyboundspercent = 0.15
 		camerasmoothmovespeed = 0.06 # percent of delta-y
 
 		# only retarget y-position when player out of map range, or grounded
 		if (prevpos[1] != (playerpos[1] - CAM_PLAYER_YOFF + pheight//2)):
 			ydiff = (playerpos[1] - CAM_PLAYER_YOFF + pheight//2) - prevpos[1]
 
-			yboundsmin = prevpos[1] + CAMERA_HEIGHT*cameramoveyboundspercent
-			yboundsmax = prevpos[1] + CAMERA_HEIGHT*(1.0-cameramoveyboundspercent)
+			yboundsmin = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*cameramoveyboundspercent
+			yboundsmax = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*(1.0-cameramoveyboundspercent)
 
-			#if (playerpos[1]+pheight > yboundsmax or
-			#	playerpos[1] < yboundsmin or
-			if (playerphysics.get_collidedown()):
+			#print(yboundsmin, yboundsmax, playerpos[1], playerpos[1]+pheight)
+
+			if (playerpos[1]+pheight > yboundsmax or
+				playerpos[1] < yboundsmin or
+				playerphysics.get_collidedown()):
+
 				if (abs(ydiff) < mincammove):
 					newposy += ydiff
 				else:
