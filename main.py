@@ -272,7 +272,7 @@ class Camera:
 			if (abs(xdiff) < mincammove):
 				newposx += xdiff
 			else:
-				xdeltamove = int(xdiff * camerasmoothmovespeedx)
+				xdeltamove = xdiff * camerasmoothmovespeedx
 				if (abs(xdeltamove) < mincammove):
 					xdeltamove = mincammove * sign(xdeltamove)
 
