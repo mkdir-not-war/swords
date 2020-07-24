@@ -13,8 +13,9 @@ PHYSICS_TIME_STEP = 1.0/100
 ZOOM_MULT = 2.2
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
-MOUSE_MOVE_BORDER_MULT = .8
-MOUSE_MOVE_SPEED_MULT = 1.7
+SCREENPERCENTABOVEPLAYER = 0.62
+CAM_PLAYER_YOFF = int(CAMERA_HEIGHT/ZOOM_MULT*SCREENPERCENTABOVEPLAYER)
+CAM_PLAYER_XOFF = int(CAMERA_WIDTH/ZOOM_MULT/2)
 
 ''' 
 # physics @ PHYSICS_TIME_STEP = 1/60
@@ -166,6 +167,14 @@ class Rect:
 		result = sum_rect.contains_point(point)
 		return result
 
+	def contains_rect(self, rect):
+		result = True
+		for point in rect.get_verts():
+			if (not self.contains_point(point)):
+				result = False
+				break
+		return result
+
 grey = pygame.Color(200, 200, 200)
 lightgrey = pygame.Color(125, 125, 125)
 darkred = pygame.Color(80, 0, 0)
@@ -192,7 +201,7 @@ class Camera:
 		if (ywidth > screendim[0]):
 			width = screendim[0]
 			height = width//ASPECT_RATIO_YX
-			y_off = (screendim[1] - height)//2
+			y_off = (screendim[1] - height) * SCREENPERCENTABOVEPLAYER
 		else:
 			height = screendim[1]
 			width = height*ASPECT_RATIO_YX
@@ -210,16 +219,46 @@ class Camera:
 
 		# game pos
 		self.pos = (
-			pos[0] - CAMERA_WIDTH/2/ZOOM_MULT, 
-			pos[1] - CAMERA_HEIGHT/2/ZOOM_MULT)
+			pos[0] - CAM_PLAYER_XOFF, 
+			pos[1] - CAM_PLAYER_YOFF)
 
 	def update_pos(self, playerphysics):
 		# TODO: do this smarter
-		newpos = playerphysics.get_pos()
+		prevpos = self.pos
+		playerpos = playerphysics.get_pos()
 		pwidth, pheight = playerphysics.get_dim()
-		self.pos = (
-			newpos[0] - CAMERA_WIDTH/2/ZOOM_MULT + pwidth//2, 
-			newpos[1] - CAMERA_HEIGHT/2/ZOOM_MULT + pheight//2)
+		newposx, newposy = prevpos
+
+		mincammove = int(TILE_WIDTH*0.06)#*ZOOM?
+		cameramoveyboundspercent = 0.2
+		camerasmoothmovespeed = 0.06 # percent of delta-y
+
+		# only retarget y-position when player out of map range, or grounded
+		if (prevpos[1] != (playerpos[1] - CAM_PLAYER_YOFF + pheight//2)):
+			ydiff = (playerpos[1] - CAM_PLAYER_YOFF + pheight//2) - prevpos[1]
+
+			yboundsmin = prevpos[1] + CAMERA_HEIGHT*cameramoveyboundspercent
+			yboundsmax = prevpos[1] + CAMERA_HEIGHT*(1.0-cameramoveyboundspercent)
+
+			#if (playerpos[1]+pheight > yboundsmax or
+			#	playerpos[1] < yboundsmin or
+			if (playerphysics.get_collidedown()):
+				if (abs(ydiff) < mincammove):
+					newposy += ydiff
+				else:
+					ydeltamove = int(ydiff * camerasmoothmovespeed)
+					if (abs(ydeltamove) < mincammove):
+						ydeltamove = mincammove * sign(ydeltamove)
+
+					newposy += ydeltamove
+
+		# TODO: only retarget x-position if camera doesn't go off the map
+		if (prevpos[0] != (playerpos[0] - CAM_PLAYER_XOFF + pwidth//2)):
+
+			xdeltamove = (playerpos[0] - CAM_PLAYER_XOFF + pwidth//2) - prevpos[0]
+			newposx += xdeltamove
+
+		self.pos = (newposx, newposy)
 
 	def get_center(self):
 		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
@@ -743,6 +782,13 @@ class Entity:
 		self.player = player
 		if (not self.player is None):
 			self.player.entity = self
+
+	'''
+	def is_grounded(self):
+		assert(not self.physics is None)
+		result = self.physics.get_collidedown()
+		return result
+	'''
 
 class Player:
 	def __init__(self):
