@@ -5,43 +5,35 @@ from enum import IntEnum
 import json
 
 # constants
-#TILE_WIDTH = 16
-TILE_WIDTH = 24
+TILE_WIDTH = 20
 
 # time
 PHYSICS_TIME_STEP = 1.0/100
 
 # camera
-ZOOM_MULT = 1.0
 ASPECT_RATIO_YX = 1.78
 SCREENPERCENTABOVEPLAYER = 0.60
 SCREENPERCENTFACINGDIR = 0.54
 
-'''
-# physics @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 16
-HORZ_FRIC = 0.00975
-VERT_FRIC = 0.00066
+# physics @ PHYSICS_TIME_STEP = 1/100
+HORZ_FRIC_FORCE = 0.156
+VERT_FRIC_FORCE = 0.0089
+
+HORZ_FRIC = HORZ_FRIC_FORCE/TILE_WIDTH
+VERT_FRIC = VERT_FRIC_FORCE/TILE_WIDTH
 GRAVITY_ACCEL = 64
 
-# movement @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 16
-SIDEWAYS_ACCEL = 245
-JUMP_ACCEL = 5020
-JUMP_COOLDOWN_SEC = 0.2
-'''
+# movement @ PHYSICS_TIME_STEP = 1/100
+SIDEWAYS_ACCEL_FORCE = 18.0
+JUMP_ACCEL_FORCE = 313.0
 
-# physics @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 24
-HORZ_FRIC = 0.00975
-VERT_FRIC = 0.00066
-GRAVITY_ACCEL = 64
-
-# movement @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 24
-SIDEWAYS_ACCEL = 245
-JUMP_ACCEL = 5020
-JUMP_COOLDOWN_SEC = 0.2
+SIDEWAYS_ACCEL = SIDEWAYS_ACCEL_FORCE * TILE_WIDTH
+JUMP_ACCEL = JUMP_ACCEL_FORCE * TILE_WIDTH
 
 # input constants
 MAXINPUTQUEUELEN = 10
 HOLDBUTTONTIMESHORT = 10 * 1/60.0
+JUMP_COOLDOWN_SEC = 0.2
 
 # fudge factors
 VEL_CLAMTOZERO_RANGE = 5.0
@@ -213,7 +205,7 @@ class Camera:
 		self.screenoffset = (int(x_off), int(y_off))
 
 		# gamepixels * zoom = screenpixels
-		self.zoom = ZOOM_MULT * self.width / screendim[0]
+		self.zoom = self.width / screendim[0]
 
 		# game dim
 		self.game_width = width / self.zoom
