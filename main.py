@@ -1,23 +1,21 @@
 import pygame
+from pygame.locals import *
 from math import sqrt
 from enum import IntEnum
 import json
 
 # constants
 TILE_WIDTH = 16
+#TILE_WIDTH = 24
 
 # time
 PHYSICS_TIME_STEP = 1.0/100
 
 # camera
-ZOOM_MULT = 2.2
-#ZOOM_MULT = 1.5 #use this value when move to C++
-CAMERA_WIDTH = 1050
-CAMERA_HEIGHT = 750
+ZOOM_MULT = 1.4#1.4
+ASPECT_RATIO_YX = 1.78
 SCREENPERCENTABOVEPLAYER = 0.60
 SCREENPERCENTFACINGDIR = 0.54
-CAM_PLAYER_YOFF = int(CAMERA_HEIGHT/ZOOM_MULT*SCREENPERCENTABOVEPLAYER)
-CAM_PLAYER_XOFF = int(CAMERA_WIDTH/ZOOM_MULT*SCREENPERCENTFACINGDIR)
 
 ''' 
 # physics @ PHYSICS_TIME_STEP = 1/60
@@ -188,8 +186,6 @@ black = pygame.Color('black')
 
 spell_elements = [E_WATER, E_FIRE, E_WIND]
 
-ASPECT_RATIO_YX = 1.4
-
 class Camera:
 	def __init__(self, pos, screendim):
 
@@ -209,44 +205,50 @@ class Camera:
 			width = height*ASPECT_RATIO_YX
 			x_off = (screendim[0] - width)//2
 
-		# screen pixels
+		# screen pixels, not game units (must divide out zoom)
 		self.width = width
 		self.height = height
 
+		# 
 		self.x_offset = x_off
 		self.y_offset = y_off
 
 		# gamepixels * zoom = screenpixels
-		self.zoom = self.width / CAMERA_WIDTH * ZOOM_MULT
+		self.zoom = ZOOM_MULT * self.width / screendim[0]
+
+		# game dim
+		self.game_width = width / self.zoom
+		self.game_height = height / self.zoom
 
 		# game pos
 		self.pos = (
-			pos[0] - CAM_PLAYER_XOFF, 
-			pos[1] - CAM_PLAYER_YOFF)
+			pos[0] - int(self.game_width*SCREENPERCENTFACINGDIR), 
+			pos[1] - int(self.game_height*SCREENPERCENTABOVEPLAYER))
 
 	def update_pos(self, playerphysics):
-		# TODO: do this smarter
 		prevpos = self.pos
 		playerpos = playerphysics.get_pos()
 		pwidth, pheight = playerphysics.get_dim()
 		newposx, newposy = prevpos
 		facingdir = playerphysics.entity.facing_direction
 
-		camplayerxoff_facing = int(CAMERA_WIDTH/ZOOM_MULT*(1.0-SCREENPERCENTFACINGDIR))
+		camplayeroffy = int(self.game_height*SCREENPERCENTABOVEPLAYER)
+		camplayerxoff_facing = int(self.game_width*(1.0-SCREENPERCENTFACINGDIR))
 		if (facingdir < 0):
-			camplayerxoff_facing = CAM_PLAYER_XOFF
+			camplayerxoff_facing = int(self.game_width*SCREENPERCENTFACINGDIR)
 
 		mincammove = TILE_WIDTH*0.06
-		cameramoveyboundspercent = 0.15
+		cammoveyboundspercenttop = 0.2
+		cammoveyboundspercentbot = 0.22
 		camerasmoothmovespeedy = 0.05 # percent of delta-y
 		camerasmoothmovespeedx = 0.10 # percent of delta-x
 
 		# only retarget y-position when player out of map range, or grounded
-		if (prevpos[1] != (playerpos[1] + pheight//2 - CAM_PLAYER_YOFF)):
-			ydiff = (playerpos[1] + pheight//2 - CAM_PLAYER_YOFF) - prevpos[1]
+		if (prevpos[1] != (playerpos[1] + pheight//2 - camplayeroffy)):
+			ydiff = (playerpos[1] + pheight//2 - camplayeroffy) - prevpos[1]
 
-			yboundsmin = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*cameramoveyboundspercent
-			yboundsmax = prevpos[1] + CAMERA_HEIGHT/ZOOM_MULT*(1.0-cameramoveyboundspercent)
+			yboundsmin = prevpos[1] + self.game_height*cammoveyboundspercenttop
+			yboundsmax = prevpos[1] + self.game_height*(1.0-cammoveyboundspercentbot)
 
 			if (playerpos[1]+pheight > yboundsmax or
 				playerpos[1] < yboundsmin or
@@ -327,10 +329,12 @@ class Camera:
 		return result
 
 	def get_maptilebounds(self, geometry):
+		#print(self.screen2cam(*self.pos))
+		#input()
 		mtx, mty = geometry.get_pos2tile(*self.pos)
 
-		width = self.width // (TILE_WIDTH*2/self.zoom)
-		height = self.height // (TILE_WIDTH*2/self.zoom)
+		width = self.width * self.zoom // (TILE_WIDTH*2)
+		height = self.height * self.zoom // (TILE_WIDTH*2)
 
 		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
 
@@ -450,18 +454,6 @@ class MapData:
 				self.spriteindexset.append((name, index))
 
 			elif (loadphase == 3):
-				# load middleground, each char is 2x2 tiles
-				sline = line.strip('\n').split(',')
-				colnum = 0
-
-				for char in sline:
-					if (char != '0'):
-						# set sprite index
-						spriteindex = spriteindextranslator[int(char)]
-						self.spriteindex_mg[linenum*2 * self.width + colnum] = spriteindex
-					colnum += 2
-
-			elif (loadphase == 4):
 				# load geometry, each char is 2x2 tiles
 				sline = line.strip('\n').split(',')
 				colnum = 0
@@ -483,6 +475,21 @@ class MapData:
 						self.geo[(linenum * 2 + 1) * self.width + colnum] = False
 						self.geo[(linenum * 2 + 1) * self.width + colnum + 1] = False
 
+					colnum += 2
+
+			elif (loadphase == 4):
+				# load middleground, each char is 2x2 tiles
+				sline = line.strip('\n').split(',')
+				colnum = 0
+
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						gridindex = linenum*2 * self.width + colnum
+						# don't draw midground behind geometry (can't see it anyway)
+						if (not self.geo[gridindex]):
+							self.spriteindex_mg[gridindex] = spriteindex
 					colnum += 2
 			
 			linenum += 1
@@ -1184,7 +1191,7 @@ class SpriteBatch:
 	def draw(self, screen, spriteindex, rect, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 		# scale image to the rect (already zoomed)
-		scale = (int(rect.width), int(rect.height))
+		scale = (int(rect.width)+1, int(rect.height)+1)
 		image = pygame.transform.scale(image, scale)
 
 		result = None
@@ -1218,9 +1225,10 @@ def main():
 	pygame.init()
 
 	# Set the width and height of the screen (width, height).
-	screendim = (800, 600)
-	#screendim = (1050, 750) #use this value when move to C++
-	window = pygame.display.set_mode(screendim)
+	screendim = (1024, 720) #use this value when move to C++
+	flags = DOUBLEBUF
+	window = pygame.display.set_mode(screendim, flags)
+	window.set_alpha(None)
 	pygame.display.set_caption("swords")
 
 	done = False
