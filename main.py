@@ -5,36 +5,36 @@ from enum import IntEnum
 import json
 
 # constants
-TILE_WIDTH = 16
-#TILE_WIDTH = 24
+#TILE_WIDTH = 16
+TILE_WIDTH = 24
 
 # time
 PHYSICS_TIME_STEP = 1.0/100
 
 # camera
-ZOOM_MULT = 1.4#1.4
+ZOOM_MULT = 1.0
 ASPECT_RATIO_YX = 1.78
 SCREENPERCENTABOVEPLAYER = 0.60
 SCREENPERCENTFACINGDIR = 0.54
 
-''' 
-# physics @ PHYSICS_TIME_STEP = 1/60
-HORZ_FRIC = 0.00975
-VERT_FRIC = 0.00081
-GRAVITY_ACCEL = 68
-
-# movement @ PHYSICS_TIME_STEP = 1/60
-SIDEWAYS_ACCEL = 245
-JUMP_ACCEL = 3830
-JUMP_COOLDOWN_SEC = 0.2
 '''
-
-# physics @ PHYSICS_TIME_STEP = 1/100
+# physics @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 16
 HORZ_FRIC = 0.00975
 VERT_FRIC = 0.00066
 GRAVITY_ACCEL = 64
 
-# movement @ PHYSICS_TIME_STEP = 1/100
+# movement @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 16
+SIDEWAYS_ACCEL = 245
+JUMP_ACCEL = 5020
+JUMP_COOLDOWN_SEC = 0.2
+'''
+
+# physics @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 24
+HORZ_FRIC = 0.00975
+VERT_FRIC = 0.00066
+GRAVITY_ACCEL = 64
+
+# movement @ PHYSICS_TIME_STEP = 1/100, TILE_WIDTH = 24
 SIDEWAYS_ACCEL = 245
 JUMP_ACCEL = 5020
 JUMP_COOLDOWN_SEC = 0.2
@@ -206,12 +206,11 @@ class Camera:
 			x_off = (screendim[0] - width)//2
 
 		# screen pixels, not game units (must divide out zoom)
-		self.width = width
-		self.height = height
+		self.width = int(width)
+		self.height = int(height)
 
-		# 
-		self.x_offset = x_off
-		self.y_offset = y_off
+		# only used to draw camera screen onto parent screen
+		self.screenoffset = (int(x_off), int(y_off))
 
 		# gamepixels * zoom = screenpixels
 		self.zoom = ZOOM_MULT * self.width / screendim[0]
@@ -283,10 +282,6 @@ class Camera:
 
 		self.pos = (newposx, newposy)
 
-	def get_center(self):
-		result = (self.width//2 + self.x_offset, self.height//2 + self.y_offset)
-		return result
-
 	def game2screen(self, x, y):
 		xpos = x - self.pos[0]
 		ypos = y - self.pos[1]
@@ -298,23 +293,12 @@ class Camera:
 
 		return result
 
-	def screen2cam(self, x, y):
-		xpos = int((x - self.x_offset) // self.zoom + 0.5)
-		ypos = int((y - self.y_offset) // self.zoom + 0.5)
-
-		result = (
-			xpos + self.pos[0],
-			ypos + self.pos[1]
-		)
-
-		return result
-
 	def get_screenrect(self, rect):
 		result = Rect(
 			self.game2screen(rect.x, rect.y),
 			(
-				int(rect.width * self.zoom + 0.5), 
-				int(rect.height * self.zoom + 0.5)
+				int(rect.width * self.zoom),
+				int(rect.height * self.zoom)
 			)
 		)
 		return result
@@ -322,19 +306,17 @@ class Camera:
 	def get_camerascreen(self, window):
 		result = window.subsurface(
 			pygame.Rect(
-				(int(self.x_offset), int(self.y_offset)),
-				(int(self.width), int(self.height))
+				self.screenoffset,
+				(self.width, self.height)
 			)
 		)
 		return result
 
 	def get_maptilebounds(self, geometry):
-		#print(self.screen2cam(*self.pos))
-		#input()
 		mtx, mty = geometry.get_pos2tile(*self.pos)
 
-		width = self.width * self.zoom // (TILE_WIDTH*2)
-		height = self.height * self.zoom // (TILE_WIDTH*2)
+		width = self.game_width / TILE_WIDTH + 2
+		height = self.game_height / TILE_WIDTH + 2
 
 		result = Rect((int(mtx), int(mty)), (int(width), int(height)))
 
@@ -1191,7 +1173,7 @@ class SpriteBatch:
 	def draw(self, screen, spriteindex, rect, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 		# scale image to the rect (already zoomed)
-		scale = (int(rect.width)+1, int(rect.height)+1)
+		scale = (int(rect.width), int(rect.height))
 		image = pygame.transform.scale(image, scale)
 
 		result = None
@@ -1420,30 +1402,9 @@ def main():
 				)
 				pygame.draw.rect(screen, pygame.Color(color), rect.get_pyrect(), 1)
 
-
-		# draw all geo
-		'''
-		for j in range(geometry.height):
-			for i in range(geometry.width):
-				if (geometry.get_geo(i, j)):
-					rect = camera.get_screenrect(
-						Rect(
-							geometry.get_tile2pos(i, j, offset=False),
-							(TILE_WIDTH, TILE_WIDTH)
-						)
-					)
-					pygame.draw.rect(screen, black, rect.get_pyrect(), 1)
-		'''
-
 		screen.blit(fps_text, (1, 1))
 		
-
 		pygame.display.flip()
-
-		'''
-		if (len(highlight) > 0):
-			input()
-		'''
 
 	pygame.quit()
 
