@@ -11,9 +11,10 @@ PHYSICS_TIME_STEP = 1.0/100
 
 # camera
 ZOOM_MULT = 2.2
+#ZOOM_MULT = 1.5 #use this value when move to C++
 CAMERA_WIDTH = 1050
 CAMERA_HEIGHT = 750
-SCREENPERCENTABOVEPLAYER = 0.62
+SCREENPERCENTABOVEPLAYER = 0.60
 SCREENPERCENTFACINGDIR = 0.54
 CAM_PLAYER_YOFF = int(CAMERA_HEIGHT/ZOOM_MULT*SCREENPERCENTABOVEPLAYER)
 CAM_PLAYER_XOFF = int(CAMERA_WIDTH/ZOOM_MULT*SCREENPERCENTFACINGDIR)
@@ -235,7 +236,7 @@ class Camera:
 		if (facingdir < 0):
 			camplayerxoff_facing = CAM_PLAYER_XOFF
 
-		mincammove = int(TILE_WIDTH*0.06)#*ZOOM?
+		mincammove = TILE_WIDTH*0.06
 		cameramoveyboundspercent = 0.15
 		camerasmoothmovespeedy = 0.05 # percent of delta-y
 		camerasmoothmovespeedx = 0.10 # percent of delta-x
@@ -252,10 +253,13 @@ class Camera:
 				playerphysics.get_collidedown()):
 
 				if (abs(ydiff) < mincammove):
+					# case 1: super close, just move diff
 					newposy += ydiff
 				else:
-					ydeltamove = int(ydiff * camerasmoothmovespeedy)
+					# case 2: far enough, lerp one step
+					ydeltamove = ydiff * camerasmoothmovespeedy
 					if (abs(ydeltamove) < mincammove):
+						# case 3: lerped step is too small, move min step
 						ydeltamove = mincammove * sign(ydeltamove)
 
 					newposy += ydeltamove
@@ -1215,6 +1219,7 @@ def main():
 
 	# Set the width and height of the screen (width, height).
 	screendim = (800, 600)
+	#screendim = (1050, 750) #use this value when move to C++
 	window = pygame.display.set_mode(screendim)
 	pygame.display.set_caption("swords")
 
