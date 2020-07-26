@@ -15,6 +15,10 @@ def sign(n):
 	else:
 		return 0
 
+def v2_int(v):
+	result = (int(v[0]), int(v[1]))
+	return result
+
 def v2_dot(v1, v2):
 	result = v1[0]*v2[0] + v1[1]*v2[1]
 	return result
@@ -22,6 +26,24 @@ def v2_dot(v1, v2):
 def v2_add(v1, v2):
 	result = (v1[0]+v2[0], v1[1]+v2[1])
 	return result
+
+def v2_scale2clamp(v, clamp):
+	cw, ch = clamp
+	vw, vh = v
+
+	diffx = cw - vw
+	diffy = ch - vh
+
+	rw = rh = 0
+
+	if (diffx > diffy):
+		rw = cw
+		rh = cw * vh / vw
+	else:
+		rw = ch * vw / vh
+		rh = ch	
+
+	return (rw, rh)
 
 def length(v):
 	result = sqrt(v[0]**2 + v[1]**2)
@@ -58,6 +80,10 @@ class Rect:
 
 	def print(self):
 		print((self.x, self.y), (self.width, self.height))
+
+	def get_dim(self):
+		result = (self.width, self.height)
+		return result
 
 	def move(self, dp):
 		self.x += dp[0]
@@ -160,33 +186,68 @@ class EntityLoader:
 		return entity
 
 class Entity:
-	def __init__(self, position=(0, 0), spriteindex=None, physics=None, animator=None, player=None):
+	def __init__(self, position=(0, 0), physics=None, spriteindex=None, animator=None, player=None):
 		# common state vars
 		self.x, self.y = position
-		self.spriteindex = spriteindex
 		self.facing_direction = 1 # TODO: encode starting facing dir in spawn_loc on map
 
 		# components
 		self.physics = physics
-		if (not self.physics is None):
-			self.physics.entity = self
+		self.physics.entity = self
 
 		self.player = player
 		if (not self.player is None):
 			self.player.entity = self
 
 		self.animator = animator
-		if (not self.animator is None):
-			self.animator.entity = self
+		if (self.animator is None):
+			assert(not spriteindex is None)
+			self.animator = StaticAnimator(spriteindex)
+		self.animator.entity = self
 
 	def draw(self, camera, sb):
-		if (self.animator is None):
-			rect = self.physics.rect()
-			rect = camera.get_screenrect(rect)
-			blit = sb.draw(screen, self.spriteindex, rect, fliphorz=(self.facing_direction <= 0))
-			return blit
-		else:
+		result = animator.draw(sb, camera, self.facing_direction)
+		return result
 
+class StaticAnimator:
+	def __init__(self, spriteindex):
+		self.entity = None
+		self.spriteindex = spriteindex
+
+	def draw(self, sb, camera, facingdir):
+		rect = self.entity.physics.rect()
+		rect = camera.get_screenrect(rect)
+		fliphorz = (facingdir <= 0)
+		blit = sb.draw(self.spriteindex, rect, fliphorz=fliphorz)
+		return blit
+
+class SkellyAnimator:
+	def __init__(self, name):
+		self.entity = None
+		self.animations = load(name)
+		self.scale = 1.0
+
+	def load(self, entityname):
+		pass
+
+	def draw(self, sb, camera, facingdir):
+		pass
+
+class Animation:
+	def __init__(self):
+		self.name
+		self.numbones = 0
+		self.bonesprites = []
+		self.numframes = 1
+		self.bonepos = [][]
+		self.bonerot = [][]
+
+	def add_frame(self):
+		framepos = [(0, 0)] * self.numbones
+		self.framepos.append(framepos)
+		framerot = [0] * self.numbones
+		self.framerot.append(framerot)
+		self.numframes += 1
 
 class InputMoveDir(IntEnum):
 	NONE = 0
@@ -356,10 +417,11 @@ class SpriteBatch:
 		# check numloadedmapsusing -- if zero, then unload
 		pass
 
-	def draw(self, screen, spriteindex, rect, rotate=None, fliphorz=False):
+	def draw(self, spriteindex, rect, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 		# scale image to the rect (already zoomed)
-		scale = (int(rect.width), int(rect.height))
+
+		scale = rect.get_dim()
 		image = pygame.transform.scale(image, scale)
 
 		result = None
@@ -372,18 +434,21 @@ class SpriteBatch:
 
 		return result
 
-	def draw_rotate(self, screen, spriteindex, rect, degrees, fliphorz=False):
+	def draw_isrot(self, spriteindex, isrot, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 
+		pos, scale, degrees = isrot
+
 		# scale image to the rect (already zoomed)
-		scale = (int(rect.width), int(rect.height))
 		image = pygame.transform.scale(image, scale)
 
 		# rotate image
 		image = pygame.transform.rotate(image, degrees)
 
-		result = None
+		# create rect from new scaled & rotated image
+		rect = Rect(pos, image.get_size())
 
+		result = None
 		if (fliphorz):
 			image = pygame.transform.flip(image, True, False)
 			result = (image, rect.get_pyrect())
@@ -391,32 +456,6 @@ class SpriteBatch:
 			result = (image, rect.get_pyrect())
 
 		return result
-
-class Animator:
-	def __init__(self):
-		self.entity = None
-
-		# should the bone sprites go here?
-
-	def load(self, entityname):
-		pass
-
-class Animation:
-	def __init__(self):
-		self.numbones = 0
-		self.bonesprites = []
-		self.numframes = 1
-		self.framepos = [][]
-		self.framerot = [][]
-
-	def add_frame(self):
-		framepos = [(0, 0)] * self.numbones
-		self.framepos.append(framepos)
-		framerot = [0] * self.numbones
-		self.framerot.append(framerot)
-		self.numframes += 1
-
-
 
 
 def main():

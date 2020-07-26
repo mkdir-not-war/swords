@@ -64,6 +64,10 @@ def sign(n):
 	else:
 		return 0
 
+def v2_int(v):
+	result = (int(v[0]), int(v[1]))
+	return result
+
 def v2_dot(v1, v2):
 	result = v1[0]*v2[0] + v1[1]*v2[1]
 	return result
@@ -71,6 +75,24 @@ def v2_dot(v1, v2):
 def v2_add(v1, v2):
 	result = (v1[0]+v2[0], v1[1]+v2[1])
 	return result
+
+def v2_scale2clamp(v, clamp):
+	cw, ch = clamp
+	vw, vh = v
+
+	diffx = cw - vw
+	diffy = ch - vh
+
+	rw = rh = 0
+
+	if (diffx > diffy):
+		rw = cw
+		rh = cw * vh / vw
+	else:
+		rw = ch * vw / vh
+		rh = ch	
+
+	return (rw, rh)
 
 def length(v):
 	result = sqrt(v[0]**2 + v[1]**2)
@@ -107,6 +129,10 @@ class Rect:
 
 	def print(self):
 		print((self.x, self.y), (self.width, self.height))
+
+	def get_dim(self):
+		result = (self.width, self.height)
+		return result
 
 	def move(self, dp):
 		self.x += dp[0]
@@ -760,27 +786,40 @@ class EntityLoader:
 		return entity
 
 class Entity:
-	def __init__(self, position=(0, 0), spriteindex=None, physics=None, player=None):
+	def __init__(self, position=(0, 0), physics=None, spriteindex=None, animator=None, player=None):
 		# common state vars
 		self.x, self.y = position
-		self.spriteindex = spriteindex
 		self.facing_direction = 1 # TODO: encode starting facing dir in spawn_loc on map
 
 		# components
 		self.physics = physics
-		if (not self.physics is None):
-			self.physics.entity = self
+		self.physics.entity = self
 
 		self.player = player
 		if (not self.player is None):
 			self.player.entity = self
 
-	'''
-	def is_grounded(self):
-		assert(not self.physics is None)
-		result = self.physics.get_collidedown()
+		self.animator = animator
+		if (self.animator is None):
+			assert(not spriteindex is None)
+			self.animator = StaticAnimator(spriteindex)
+		self.animator.entity = self
+
+	def draw(self, sb, camera):
+		result = self.animator.draw(sb, camera, self.facing_direction)
 		return result
-	'''
+
+class StaticAnimator:
+	def __init__(self, spriteindex):
+		self.entity = None
+		self.spriteindex = spriteindex
+
+	def draw(self, sb, camera, facingdir):
+		rect = self.entity.physics.rect()
+		rect = camera.get_screenrect(rect)
+		fliphorz = (facingdir <= 0)
+		blit = sb.draw(self.spriteindex, rect, fliphorz=fliphorz)
+		return blit
 
 class Player:
 	def __init__(self):
@@ -1163,10 +1202,10 @@ class SpriteBatch:
 		# check numloadedmapsusing -- if zero, then unload
 		pass
 
-	def draw(self, screen, spriteindex, rect, fliphorz=False):
+	def draw(self, spriteindex, rect, fliphorz=False):
 		image = self.sprites[spriteindex].get_image()
 		# scale image to the rect (already zoomed)
-		scale = (int(rect.width), int(rect.height))
+		scale = rect.get_dim()
 		image = pygame.transform.scale(image, scale)
 
 		result = None
@@ -1220,9 +1259,12 @@ def main():
 
 	num_joysticks = pygame.joystick.get_count()
 	joystick = None
+	# TODO: if-statement isn't working very well
+	'''
 	if num_joysticks > 0:
 		joystick = pygame.joystick.Joystick(0) # 0 -> player 1
 		joystick.init()	
+	'''
 
 	# world state
 	worldstate = WorldState()
@@ -1350,7 +1392,7 @@ def main():
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
 					rect = camera.get_screenrect(rect)
-					blitlist.append(spritebatch.draw(screen, si, rect))
+					blitlist.append(spritebatch.draw(si, rect))
 		screen.blits(blitlist)
 		blitlist.clear()
 
@@ -1364,16 +1406,12 @@ def main():
 						(TILE_WIDTH*2, TILE_WIDTH*2)
 					)
 					rect = camera.get_screenrect(rect)
-					blitlist.append(spritebatch.draw(screen, si, rect))
+					blitlist.append(spritebatch.draw(si, rect))
 		screen.blits(blitlist)
 		blitlist.clear()
 
 		# draw player
-		playerpos = (player.x, player.y)
-		playerrect = player.physics.rect()
-		playerrect = camera.get_screenrect(playerrect)
-		playerblit = spritebatch.draw(
-			screen, player.spriteindex, playerrect, fliphorz=(player.facing_direction <= 0))
+		playerblit = player.draw(spritebatch, camera)
 		screen.blit(*playerblit)
 		
 
