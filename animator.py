@@ -224,29 +224,105 @@ class StaticAnimator:
 class SkellyAnimator:
 	def __init__(self, name):
 		self.entity = None
-		self.animations = load(name)
+		self.animations = []
 		self.scale = 1.0
+		self.defaultanimationname = ''
 
+		self.nextanimations = []
+		self.numnext = 0
+
+		self.load(name)
+		self.curranimation = self.get_animation(self.defaultanimationname)
+
+		# draw counter
+		self.currframe = 0
+
+		'''
+		if bone sprites were kept up here,
+		would be possible to lerp between positions, etc for transitions.
+		But effects would have to live here too (not a big issue...)
+		'''
+
+	'''
+	maybe move this out into some kind of AnimatorLoader class
+	especially to hold the json object
+	'''
 	def load(self, entityname):
-		pass
+		# json load??
+
+		# set default animation
+		self.defaultanimname = defaultanimname
+
+		# set scale
+		self.scale = pixelheight * TILE_WIDTH / tileheight
+
+		# set animations
+		for i in keys:
+			pass
 
 	def draw(self, sb, camera, facingdir):
-		pass
+		animation = self.curranimation
+		result = []
+
+		indexstart = self.currframe * self.numbones
+
+		for bi in range(animation.numbones):
+			si = animation.bonesprites[bi]
+			pos = animation.bonepos[indexstart + bi]
+			rot = animation.bonerot[indexstart + bi]
+			isrot = (pos, rot, self.scale)
+			result.append(sb.draw_isrot(si, isrot, fliphorz=fliphorz))
+
+		# increase frame counter, set next animation if needed
+		self.currframe += 1
+		if (self.currframe >= animation.numframes):
+			self.currframe = 0
+			if (not animation.repeat):
+				if (self.numnext > 0):
+					nextanimname = self.nextanimations.pop(0)
+					self.curranimation = self.get_animation(nextanimname)
+					self.numnext -= 1
+				elif (animation.name != self.defaultanimationname):
+					self.curranimation = self.get_animation(self.defaultanimationname)
+
+		return result
+
+	def clear_queue(self):
+		self.nextanimations.clear()
+		self.numnext = 0
+
+	def get_animation(self, animname):
+		result = None
+		for a in self.animations:
+			if a.name == animname:
+				result = a
+		return result
+
+	def stop_and_play(self, animname):
+		self.clear_queue()
+		animation = self.get_animation(animname)
+		self.currframe = 0
+		self.curranimation = animation
+
+	def queue_next(self, animname):
+		self.nextanimations.append(animname)
+		self.numnext += 1
 
 class Animation:
-	def __init__(self):
-		self.name
-		self.numbones = 0
+	def __init__(self, name, numbones, numframes, repeat):
+		self.name = name
+		self.numbones = numbones
 		self.bonesprites = []
-		self.numframes = 1
+		self.numframes = numframes
 		self.bonepos = [][]
 		self.bonerot = [][]
+		self.repeat = repeat
 
 	def add_frame(self):
-		framepos = [(0, 0)] * self.numbones
-		self.framepos.append(framepos)
-		framerot = [0] * self.numbones
-		self.framerot.append(framerot)
+		bonepos = [(0, 0)] * self.numbones
+		self.bonepos.append(bonepos)
+		bonerot = [0] * self.numbones
+		self.bonerot.append(bonerot)
 		self.numframes += 1
 
 class InputMoveDir(IntEnum):
