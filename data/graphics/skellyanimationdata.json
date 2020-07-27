@@ -1,0 +1,11 @@
+{
+	"datatype" : "skelly",
+	
+	"human-idle-noweapon" : {
+		"imageheightpx" : 1,
+		"tileheight" : 1,
+		"numbones" : 0,
+		"numframes" : 1,
+		"repeat" : 1
+	},
+}

@@ -760,8 +760,7 @@ class EntityLoader:
 		position = position
 
 		edata = self.entitydata[ename]
-
-		testnull = edata["testnull"]
+		
 		spritedata = edata["spritedata"]
 		physicsdata = edata["physicsdata"]
 		playerenable = edata["player"]
@@ -1159,11 +1158,11 @@ class SpriteBatch:
 		self.length = 0
 		self.sprites = []
 
-		fin = open('./data/scenespritedata.json')
+		fin = open('./data/graphics/scenespritedata.json')
 		self.scenespritedata = json.load(fin)
 		fin.close()
 
-		fin = open('./data/actorspritedata.json')
+		fin = open('./data/graphics/actorspritedata.json')
 		self.actorspritedata = json.load(fin)
 		fin.close()
 

@@ -147,12 +147,13 @@ red = pygame.Color('red')
 black = pygame.Color('black')
 
 class EntityLoader:
-	def __init__(self, spritebatch):
+	def __init__(self, spritebatch, animationloader):
 		fin = open('./data/entitydata.json')
 		self.entitydata = json.load(fin)
 		fin.close()
 
 		self.spritebatch = spritebatch
+		self.animationloader = animationloader
 
 	def create_entity(self, ename, position=(0,0)):
 		assert(ename in self.entitydata)
@@ -161,9 +162,9 @@ class EntityLoader:
 
 		edata = self.entitydata[ename]
 
-		testnull = edata["testnull"]
 		spritedata = edata["spritedata"]
 		physicsdata = edata["physicsdata"]
+		animationdata = edata["animationdata"]
 		playerenable = edata["player"]
 
 		spriteindex = None
@@ -178,11 +179,39 @@ class EntityLoader:
 			# push position up by heightintiles
 			position = (position[0], position[1]-(int(physicsdata["height"])*TILE_WIDTH))
 
+		animator = None
+		if (not animationdata is None):
+			animatortype = animationdata["type"]
+			if (animatortype == "skelly"):
+				animator = SkellyAnimator(self.animationloader)
+				#animator.scale = pixelheight * TILE_WIDTH / tileheight
+			elif (animatortype == "frameby"):
+				pass
+			else:
+				assert(False, "malformed animation data on entity %s" % ename)
+
+			animations = animationdata["animations"]
+			for a in animations:
+				aindex = self.animationloader.add(self.spritebatch, a, animatortype)
+				animator.animations.append(aindex)
+				'''
+				Each entity can only use animations of the same type as 
+				its own single animator. No entity has two animators.
+				'''
+
+			defaultanimname = animationdata["default"]
+			animator.defaultanimationname = defaultanimname
+
 		player = None
 		if (not playerenable is None):
 			player = Player()
 
-		entity = Entity(position=position, spriteindex=spriteindex, physics=physics, player=player)
+		entity = Entity(
+			position=position, 
+			spriteindex=spriteindex, 
+			physics=physics, 
+			animator=animator,
+			player=player)
 		return entity
 
 class Entity:
@@ -192,18 +221,23 @@ class Entity:
 		self.facing_direction = 1 # TODO: encode starting facing dir in spawn_loc on map
 
 		# components
+		''' # comment out for animation editor
 		self.physics = physics
 		self.physics.entity = self
-
-		self.player = player
-		if (not self.player is None):
-			self.player.entity = self
+		'''
 
 		self.animator = animator
 		if (self.animator is None):
 			assert(not spriteindex is None)
 			self.animator = StaticAnimator(spriteindex)
 		self.animator.entity = self
+
+		'''
+		self.player = player
+		if (not self.player is None):
+			self.player.entity = self
+			self.player.loadshit() <- like animator.defaultanimationname
+		'''
 
 	def draw(self, camera, sb):
 		result = animator.draw(sb, camera, self.facing_direction)
@@ -221,14 +255,75 @@ class StaticAnimator:
 		blit = sb.draw(self.spriteindex, rect, fliphorz=fliphorz)
 		return blit
 
+class AnimationLoader:
+	def __init__(self):
+		self.length = 0
+		self.animations = []
+
+		fin = open('./data/graphics/skellyanimationdata.json')
+		self.skellyanimdata = json.load(fin)
+		fin.close()
+
+		fin = open('./data/graphics/framebyanimationdata.json')
+		self.framebyanimdata = json.load(fin)
+		fin.close()
+
+	def get(self, animindex):
+		if (animindex >= self.length):
+			return None
+		result = self.animations[animindex]
+		return result
+
+	def add(self, sb, animname, datatype):
+		result = -1
+		for i in range(self.length):
+			if animname == self.animations[i].name:
+				result = i
+				self.animations[i].numentitiesusing += 1
+		if (result < 0):
+			# load the new animation in
+			if (datatype == 'skelly'):
+				newanimation = Animation(sb, self.skellyanimdata, animname)
+			elif (datatype == 'frameby'):
+				newanimation = Animation(sb, self.framebyanimdata, animname)
+			self.animations.append(newanimation)
+			result = self.length
+			self.length += 1
+
+		return result
+
+class Animation:
+	#def __init__(self, name, numbones, numframes, repeat):
+	def __init__(self, sb, data, name):
+		self.name = name
+
+		anim = data[name]
+
+		self.numbones = int(anim["numbones"])
+		self.numframes = int(anim["numframes"])
+
+		self.repeat = False
+		if (not anim["repeat"] is None):
+			self.repeat = True
+
+		self.bonesprites = []
+		for bsname in anim["bonesprites"]:
+			self.bonesprites.append(sb.add(bsname))
+
+		self.bonepos = [][]
+		self.bonerot = [][]
+
+		self.numentitiesusing = 0
+
 class SkellyAnimator:
-	def __init__(self, name):
+	def __init__(self, animationloader):
 		self.entity = None
+		self.animationloader = animationloader
 		self.animations = []
 		self.scale = 1.0
 		self.defaultanimationname = ''
 
-		self.nextanimations = []
+		self.nextanimationindexs = []
 		self.numnext = 0
 
 		self.load(name)
@@ -237,39 +332,19 @@ class SkellyAnimator:
 		# draw counter
 		self.currframe = 0
 
-		'''
-		if bone sprites were kept up here,
-		would be possible to lerp between positions, etc for transitions.
-		But effects would have to live here too (not a big issue...)
-		'''
-
-	'''
-	maybe move this out into some kind of AnimatorLoader class
-	especially to hold the json object
-	'''
-	def load(self, entityname):
-		# json load??
-
-		# set default animation
-		self.defaultanimname = defaultanimname
-
-		# set scale
-		self.scale = pixelheight * TILE_WIDTH / tileheight
-
-		# set animations
-		for i in keys:
-			pass
-
 	def draw(self, sb, camera, facingdir):
 		animation = self.curranimation
 		result = []
 
 		indexstart = self.currframe * self.numbones
 
+		epos = (self.entity.x, self.entity.y)
+
 		for bi in range(animation.numbones):
 			si = animation.bonesprites[bi]
 			pos = animation.bonepos[indexstart + bi]
 			rot = animation.bonerot[indexstart + bi]
+			pos = v2_add(pos, epos)
 			isrot = (pos, rot, self.scale)
 			result.append(sb.draw_isrot(si, isrot, fliphorz=fliphorz))
 
@@ -293,9 +368,11 @@ class SkellyAnimator:
 
 	def get_animation(self, animname):
 		result = None
-		for a in self.animations:
+		for aindex in self.animations:
+			a = self.animationloader.get(aindex)
 			if a.name == animname:
 				result = a
+				break
 		return result
 
 	def stop_and_play(self, animname):
@@ -308,22 +385,8 @@ class SkellyAnimator:
 		self.nextanimations.append(animname)
 		self.numnext += 1
 
-class Animation:
-	def __init__(self, name, numbones, numframes, repeat):
-		self.name = name
-		self.numbones = numbones
-		self.bonesprites = []
-		self.numframes = numframes
-		self.bonepos = [][]
-		self.bonerot = [][]
-		self.repeat = repeat
-
-	def add_frame(self):
-		bonepos = [(0, 0)] * self.numbones
-		self.bonepos.append(bonepos)
-		bonerot = [0] * self.numbones
-		self.bonerot.append(bonerot)
-		self.numframes += 1
+	def set_defaultanimation(self, animname):
+		self.defaultanimationname = animname
 
 class InputMoveDir(IntEnum):
 	NONE = 0
@@ -533,6 +596,20 @@ class SpriteBatch:
 
 		return result
 
+### Animation Editor Code ##########################################
+
+def saveanimation():
+	# pixelheight = lowest sprite pos-y + image.get_height()
+	pass
+
+def add_frame(animation):
+	bonepos = [(0, 0)] * animation.numbones
+	animation.bonepos.append(bonepos)
+	bonerot = [0] * animation.numbones
+	animation.bonerot.append(bonerot)
+	animation.numframes += 1
+
+####################################################################
 
 def main():
 	pygame.init()
@@ -548,15 +625,19 @@ def main():
 
 	# load data
 	spritebatch = SpriteBatch()
+	animationloader = AnimationLoader()
+	entityloader = EntityLoader(spritebatch, animationloader)
 
 	# input stuff
-	pygame.joystick.init()
 	prev_input = []
 	curr_input = [] # int list
 	inputdata = InputDataBuffer()
 
 	# load fonts
 	font = pygame.font.Font('./data/fonts/ARI.ttf', 32)
+
+	# editor stuff
+	current_entity = None
 
 	while not done:
 
@@ -591,21 +672,13 @@ def main():
 		# draw sprites
 		blitlist = []
 
-		# draw player
-		'''
-		playerpos = (player.x, player.y)
-		playerrect = player.physics.rect()
-		playerrect = camera.get_screenrect(playerrect)
-		playerblit = spritebatch.draw(
-			screen, player.spriteindex, playerrect, fliphorz=(player.facing_direction <= 0))
-		screen.blit(*playerblit)
-		'''
-
-		screen.blit(fps_text, (1, 1))
+		# draw entity
+		blitlist.append(current_entity.draw(spritebatch))
+		screen.blits(blitlist)
+		blitlist.clear()
 		
-
+		# display screen
 		pygame.display.flip()
-
 
 	pygame.quit()
 

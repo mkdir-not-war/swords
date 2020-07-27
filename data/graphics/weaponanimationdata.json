@@ -1,0 +1,67 @@
+{
+	"noweapon" : {
+		"idle" : "human-idle-noweapon",
+		"duck" : "human-duck-noweapon",
+		"slide" : "human-slide-noweapon",
+		"jump" : "human-jump-noweapon",
+		"longjump" : "human-longjump-noweapon",
+		"guard" : "human-guard-noweapon",
+		"dodgef" : "human-dodgef-noweapon",
+		"dodgeb" : "human-dodgeb-noweapon",
+		"flinch" : "human-flinch-noweapon",
+		"falldown" : "human-falldown-noweapon",
+		"prone" : "human-prone-noweapon",
+		"getup" : "human-getup-noweapon",
+		"windup" : "human-windup-noweapon",
+		"light" : "human-noweapon-hook",
+		"heavy" : "human-noweapon-uppercut",
+	},
+	"stick&shield" : {
+
+	},
+	"2hbigstick" : {
+
+	},
+	"sword&buckler" : {
+
+	},
+	"longsword" : {
+
+	},
+	"greatsword" : {
+
+	},
+	"shortbow" : {
+
+	},
+	"longbow" : {
+
+	},
+	"axe&shield" : {
+
+	},
+	"hammer&shield" : {
+
+	},
+	"greathammer" : {
+
+	},
+	"spear&shield" : {
+
+	},
+	"twindaggers" : {
+
+	},
+	"twinaxes" : {
+
+	},
+	"glaive" : {
+
+	},
+	"halberd" : {
+
+	},
+	"knife" : {
+
+	}
+}
