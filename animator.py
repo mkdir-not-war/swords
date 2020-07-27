@@ -2,9 +2,10 @@ import pygame
 from math import sqrt
 from enum import IntEnum
 import json
+import os
 
 # constants
-TILE_WIDTH = 16
+TILE_WIDTH = 20
 MAXINPUTQUEUELEN = 10
 
 def sign(n):
@@ -169,7 +170,7 @@ class EntityLoader:
 
 		spriteindex = None
 		if (not spritedata is None):
-			spriteindex = self.spritebatch.add(spritedata["spritename"], 'actor')
+			spriteindex = self.spritebatch.add(spritedata["spritename"])
 
 		physics = None
 		if (not physicsdata is None):
@@ -193,7 +194,7 @@ class EntityLoader:
 			animations = animationdata["animations"]
 			for a in animations:
 				aname = animations[a]
-				aindex = self.animationloader.add(self.spritebatch, aname, animatortype)
+				aindex = self.animationloader.add(aname, animatortype)
 				animator.animations.append(aindex)
 				'''
 				Each entity can only use animations of the same type as 
@@ -282,7 +283,7 @@ class AnimationLoader:
 		result = self.animations[animindex]
 		return result
 
-	def add(self, sb, animname, datatype):
+	def add(self, animname, datatype):
 		result = -1
 		for i in range(self.length):
 			if animname == self.animations[i].name:
@@ -291,7 +292,7 @@ class AnimationLoader:
 		if (result < 0):
 			# load the new animation in
 			if (datatype == 'skelly'):
-				newanimation = SkellyAnimation(sb, self.skellyanimdata, animname)
+				newanimation = SkellyAnimation(self.skellyanimdata[animname], animname)
 			elif (datatype == 'frameby'):
 				#newanimation = Animation(sb, self.framebyanimdata, animname)
 				pass
@@ -303,20 +304,31 @@ class AnimationLoader:
 
 class SkellyAnimation:
 	#def __init__(self, name, numbones, numframes, repeat):
-	def __init__(self, sb, data, name):
+	def __init__(self, name, adata):
 		self.name = name
 
-		anim = data[name]
-
-		self.numbones = int(anim["numbones"])
-		self.numframes = int(anim["numframes"])
+		self.numbones = int(adata["numbones"])
+		self.numframes = int(adata["numframes"])
 
 		self.repeat = False
-		if (not anim["repeat"] is None):
+		if (not adata["repeat"] is None):
 			self.repeat = True
 
-		self.bonepos = [][]
-		self.bonerot = [][]
+		self.pixelheight = int(adata["imageheightpx"])
+		self.tileheight = int(adata["tileheight"])
+
+		self.bonepos = []
+		for bp in adata["bonepos"]:
+			pos = (
+				float(adata["bonepos"][bp]["x"]), 
+				float(adata["bonepos"][bp]["y"])
+			)
+			self.bonepos.append(pos)
+
+		self.bonerot = []
+		for br in adata["bonerot"]:
+			rot = float(adata["bonerot"][br])
+			self.bonerot.append(rot)
 
 		self.numentitiesusing = 0
 
@@ -348,7 +360,7 @@ class SkellyAnimator:
 		self.currframe = 0
 
 	def add_bonesprite(self, bsname):
-		bonespriteindex = self.bonesprites.append(sb.add(bsname), )
+		bonespriteindex = self.bonesprites.append(sb.add(bsname))
 		self.bonesprites.append(bonespriteindex)
 
 	def draw(self, sb, camera, facingdir):
@@ -511,12 +523,8 @@ class SpriteBatch:
 		self.length = 0
 		self.sprites = []
 
-		fin = open('./data/scenespritedata.json')
-		self.scenespritedata = json.load(fin)
-		fin.close()
-
-		fin = open('./data/actorspritedata.json')
-		self.actorspritedata = json.load(fin)
+		fin = open('./data/graphics/spritedata.json')
+		self.spritedata = json.load(fin)
 		fin.close()
 
 	def get(self, spriteindex):
@@ -532,7 +540,7 @@ class SpriteBatch:
 			result += '%d\t%s\n' % (i, spritename)
 		print(result)
 
-	def add(self, spritename, datatype):
+	def add(self, spritename):
 		result = -1
 		for i in range(self.length):
 			if spritename == self.sprites[i].name:
@@ -540,10 +548,7 @@ class SpriteBatch:
 				self.sprites[i].numloadedmapsusing += 1
 		if (result < 0):
 			# load the new sprite in
-			if (datatype == 'actor'):
-				newspritesheet = SpriteSheet(self.actorspritedata, spritename)
-			elif (datatype == 'scene'):
-				newspritesheet = SpriteSheet(self.scenespritedata, spritename)
+			newspritesheet = SpriteSheet(self.spritedata, spritename)
 			self.sprites.append(newspritesheet)
 			result = self.length
 			self.length += 1
@@ -607,6 +612,39 @@ def add_frame(animation):
 	animation.bonerot.append(bonerot)
 	animation.numframes += 1
 
+def load_animation(name, data):
+	result = SkellyAnimation(name, data)
+	return result
+
+def save_animation(data, adata):
+	# save values here
+
+	data[animation.name] = adata
+
+	filename = './data/graphics/skellyanimationdata.json'
+	os.remove(filename)
+	with open(filename, 'w') as f:
+		json.dump(data, f, indent=4)
+	print('New animation saved.')
+
+def new_adata(aname):
+	result = {}
+
+def change_entity(edata, sb):
+	ename = "testboar"#input("entity name: ")
+	assert(ename in edata)
+	edata = edata[ename]
+	edata = edata["animationdata"]
+	assert(edata["type"] == "skelly")
+	edata = edata["sprites"]
+
+	bonesprites = []
+	for snum in edata:
+		sname = edata[snum]
+		bonesprites.append(sb.add(sname))
+
+	return bonesprites
+
 ####################################################################
 
 def main():
@@ -625,6 +663,7 @@ def main():
 	spritebatch = SpriteBatch()
 	animationloader = AnimationLoader()
 	entityloader = EntityLoader(spritebatch, animationloader)
+	edata = entityloader.entitydata
 
 	# input stuff
 	prev_input = []
@@ -635,7 +674,18 @@ def main():
 	font = pygame.font.Font('./data/fonts/ARI.ttf', 32)
 
 	# editor stuff
-	current_entity = None
+	adata = None
+	aname = "boar-idle"#input("animation name: ")
+	sad = animationloader.skellyanimdata
+	if (aname in sad):
+		adata = sad[aname]
+	else:
+		adata = new_adata(aname)
+	current_animation = load_animation(aname, adata)
+
+	bonesprites = change_entity(edata, spritebatch)
+
+	print(bonesprites)
 
 	while not done:
 

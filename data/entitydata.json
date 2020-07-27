@@ -1,7 +1,7 @@
 {
 	"datatype" : "entity",
 	
-	"brownboar" : {
+	"testboar" : {
 		"spritedata" : null,
 		"physicsdata" : {
 			"height" : "3",
@@ -13,6 +13,34 @@
 				"0" : "boar-idle",
 				"1" : "boar-fall",
 				"2" : "boar-prone"
+			},
+			"default" : "boar-idle",
+			"sprites" : {
+				"0" : "brownboar-lleg-leftfront",
+				"1" : "brownboar-uleg-leftfront",
+				"2" : "brownboar-torso",
+				"3" : "brownboar-head",
+				"4" : "brownboar-uleg-rightfront",
+				"5" : "brownboar-lleg-rightfront"
+			}
+		},
+		"player" : null
+	},
+	"brownboar" : {
+		"spritedata" : null,
+		"physicsdata" : {
+			"height" : "3",
+			"width" : "3"
+		},
+		"animationdata" : {
+			"type" : "skelly",
+			"animations" : {
+				"0" : "boar-idle",
+				"1" : "boar-fall",
+				"2" : "boar-prone",
+				"3" : "boar-windup",
+				"4" : "boar-running",
+				"5" : "boar-flinch"
 			},
 			"default" : "boar-idle",
 			"sprites" : {

@@ -7,7 +7,15 @@
 		"numbones" : 0,
 		"numframes" : 1,
 		"repeat" : 1,
-		"bonesprites" : null
+		"bonepos" : {
+			"0" : {
+				"x" : "0",
+				"y" : "0"
+			}
+		},
+		"bonerot" : {
+			"0" : "10"
+		}
 	},
 	"boar-idle" : {
 		"imageheightpx" : 1,
@@ -15,7 +23,12 @@
 		"numbones" : 0,
 		"numframes" : 1,
 		"repeat" : 1,
-		"bonesprites" : null
+		"bonepos" : {
+
+		},
+		"bonerot" : {
+			
+		}
 	},
 	"boar-fall" : {
 		"imageheightpx" : 1,
@@ -23,7 +36,12 @@
 		"numbones" : 0,
 		"numframes" : 1,
 		"repeat" : 1,
-		"bonesprites" : null
+		"bonepos" : {
+
+		},
+		"bonerot" : {
+			
+		}
 	},
 	"boar-prone" : {
 		"imageheightpx" : 1,
@@ -31,6 +49,11 @@
 		"numbones" : 0,
 		"numframes" : 1,
 		"repeat" : 1,
-		"bonesprites" : null
+		"bonepos" : {
+
+		},
+		"bonerot" : {
+			
+		}
 	}
 }
