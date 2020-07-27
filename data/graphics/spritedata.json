@@ -1,0 +1,26 @@
+{
+	"knight01" : {
+		"file" : "./res/actors/player/knight01.png"
+	},
+	"tallknight" : {
+		"file" : "./res/actors/player/tallknight.png"
+	},
+	"greybox" : {
+		"file" : "./res/scene/geometry/greybox.png"
+	},
+	"bluebox" : {
+		"file" : "./res/scene/geometry/bluebox.png"
+	},
+	"darkpurplebox" : {
+		"file" : "./res/scene/geometry/darkpurplebox.png"
+	},
+	"dirt-center" : {
+		"file" : "./res/scene/geometry/dirt-center.png"
+	},
+	"dirt-grasstop" : {
+		"file" : "./res/scene/geometry/dirt-grasstop.png"
+	},
+	"MG_cave-wall" : {
+		"file" : "./res/scene/geometry/MG_cave-wall.png"
+	}
+}

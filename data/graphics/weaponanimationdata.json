@@ -15,6 +15,7 @@
 		"windup" : "human-windup-noweapon",
 		"light" : "human-noweapon-hook",
 		"heavy" : "human-noweapon-uppercut",
+		"activate" : "human-noweapon-activate"
 	},
 	"stick&shield" : {
 

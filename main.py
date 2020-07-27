@@ -450,7 +450,7 @@ class MapData:
 			elif (loadphase == 2):
 				# load sprites
 				name = line.strip('\n').split(',')[1]
-				index = spritebatch.add(name, 'scene')
+				index = spritebatch.add(name)
 				spriteindextranslator.append(index)
 				self.spriteindexset.append((name, index))
 
@@ -767,7 +767,7 @@ class EntityLoader:
 
 		spriteindex = None
 		if (not spritedata is None):
-			spriteindex = self.spritebatch.add(spritedata["spritename"], 'actor')
+			spriteindex = self.spritebatch.add(spritedata["spritename"])
 
 		physics = None
 		if (not physicsdata is None):
@@ -1117,32 +1117,10 @@ class InputDataBuffer:
 class SpriteSheet:
 	def __init__(self, data, name):
 		self.name = name
-
-		self.image = None
-		self.tileswide = 0
-		self.tilestall = 0
-		self.frameswide = 0
-		self.framestall = 0
-
-		self.loadsprite(data, name)
+		self.image = pygame.image.load(data[name]['file'])
 
 		# use this var to determine when to unload
 		self.numloadedmapsusing = 1
-
-	def loadsprite(self, data, name):
-		# parse the spritedata.json file in ./data
-		datatype = data['datatype']
-
-		if (datatype == 'scene'):
-			self.image = pygame.image.load(data[name]['file'])
-			self.frameswide = int(data[name]['frameswide'])
-			self.framestall = int(data[name]['framestall'])
-		elif (datatype == 'actor'):
-			self.image = pygame.image.load(data[name]['file'])
-			self.tileswide = int(data[name]['tileswide'])
-			self.tilestall = int(data[name]['tilestall'])
-			self.frameswide = int(data[name]['frameswide'])
-			self.framestall = int(data[name]['framestall'])
 
 	def get_image(self):
 		result = self.image
@@ -1158,12 +1136,8 @@ class SpriteBatch:
 		self.length = 0
 		self.sprites = []
 
-		fin = open('./data/graphics/scenespritedata.json')
-		self.scenespritedata = json.load(fin)
-		fin.close()
-
-		fin = open('./data/graphics/actorspritedata.json')
-		self.actorspritedata = json.load(fin)
+		fin = open('./data/graphics/spritedata.json')
+		self.spritedata = json.load(fin)
 		fin.close()
 
 	def get(self, spriteindex):
@@ -1179,7 +1153,7 @@ class SpriteBatch:
 			result += '%d\t%s\n' % (i, spritename)
 		print(result)
 
-	def add(self, spritename, datatype):
+	def add(self, spritename):
 		result = -1
 		for i in range(self.length):
 			if spritename == self.sprites[i].name:
@@ -1187,10 +1161,7 @@ class SpriteBatch:
 				self.sprites[i].numloadedmapsusing += 1
 		if (result < 0):
 			# load the new sprite in
-			if (datatype == 'actor'):
-				newspritesheet = SpriteSheet(self.actorspritedata, spritename)
-			elif (datatype == 'scene'):
-				newspritesheet = SpriteSheet(self.scenespritedata, spritename)
+			newspritesheet = SpriteSheet(self.spritedata, spritename)
 			self.sprites.append(newspritesheet)
 			result = self.length
 			self.length += 1

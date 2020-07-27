@@ -1,6 +1,37 @@
 {
 	"datatype" : "entity",
 	
+	"brownboar" : {
+		"spritedata" : null,
+		"physicsdata" : {
+			"height" : "3",
+			"width" : "3"
+		},
+		"animationdata" : {
+			"type" : "skelly",
+			"animations" : {
+				"0" : "boar-idle",
+				"1" : "boar-fall",
+				"2" : "boar-prone"
+			},
+			"default" : "boar-idle",
+			"sprites" : {
+				"0" : "brownboar-lleg-leftfront",
+				"1" : "brownboar-uleg-leftfront",
+				"2" : "brownboar-lleg-leftback",
+				"3" : "brownboar-uleg-leftback",
+				"4" : "brownboar-torso",
+				"5" : "brownboar-head",
+				"6" : "brownboar-utail",
+				"7" : "brownboar-ltail",
+				"8" : "brownboar-uleg-rightfront",
+				"9" : "brownboar-lleg-rightfront",
+				"10" : "brownboar-uleg-rightback",
+				"11" : "brownboar-lleg-rightback"
+			}
+		},
+		"player" : null
+	},
 	"player-local" : {
 		"spritedata" : {
 			"spritename" : "tallknight"
@@ -12,9 +43,12 @@
 		"animationdata" : {
 			"type" : "skelly",
 			"animations" : {
-				"human-idle-noweapon"
+				"0" : "human-idle-noweapon"
 			},
-			"default" : null
+			"default" : null,
+			"sprites" : {
+				
+			}
 		},
 		"player" : 1
 	},
@@ -29,9 +63,12 @@
 		"animationdata" : {
 			"type" : "skelly",
 			"animations" : {
-				"human-idle-noweapon"
+				"0" : "human-idle-noweapon"
 			},
-			"default" : null
+			"default" : null,
+			"sprites" : {
+				
+			}
 		},
 		"player" : null
 	}

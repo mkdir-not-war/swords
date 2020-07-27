@@ -192,7 +192,8 @@ class EntityLoader:
 
 			animations = animationdata["animations"]
 			for a in animations:
-				aindex = self.animationloader.add(self.spritebatch, a, animatortype)
+				aname = animations[a]
+				aindex = self.animationloader.add(self.spritebatch, aname, animatortype)
 				animator.animations.append(aindex)
 				'''
 				Each entity can only use animations of the same type as 
@@ -202,6 +203,13 @@ class EntityLoader:
 			defaultanimname = animationdata["default"]
 			animator.defaultanimationname = defaultanimname
 
+			sprites = animationdata["sprites"]
+			if (animatortype == "skelly"):
+				# set bonesprites of animator
+				for si in sprites:
+					bonename = sprites[si]
+					animator.add_bonesprite(bonename)
+		
 		player = None
 		if (not playerenable is None):
 			player = Player()
@@ -283,16 +291,17 @@ class AnimationLoader:
 		if (result < 0):
 			# load the new animation in
 			if (datatype == 'skelly'):
-				newanimation = Animation(sb, self.skellyanimdata, animname)
+				newanimation = SkellyAnimation(sb, self.skellyanimdata, animname)
 			elif (datatype == 'frameby'):
-				newanimation = Animation(sb, self.framebyanimdata, animname)
+				#newanimation = Animation(sb, self.framebyanimdata, animname)
+				pass
 			self.animations.append(newanimation)
 			result = self.length
 			self.length += 1
 
 		return result
 
-class Animation:
+class SkellyAnimation:
 	#def __init__(self, name, numbones, numframes, repeat):
 	def __init__(self, sb, data, name):
 		self.name = name
@@ -305,10 +314,6 @@ class Animation:
 		self.repeat = False
 		if (not anim["repeat"] is None):
 			self.repeat = True
-
-		self.bonesprites = []
-		for bsname in anim["bonesprites"]:
-			self.bonesprites.append(sb.add(bsname))
 
 		self.bonepos = [][]
 		self.bonerot = [][]
@@ -323,14 +328,28 @@ class SkellyAnimator:
 		self.scale = 1.0
 		self.defaultanimationname = ''
 
-		self.nextanimationindexs = []
+		self.nextanimationnames = []
 		self.numnext = 0
 
 		self.load(name)
 		self.curranimation = self.get_animation(self.defaultanimationname)
 
+		self.bonesprites = []
+		self.numbones
+		'''
+		bonesprites are sort of baked in. The animation data just says 
+		"what ever is drawn in the first layer, is drawn at these position and rots."
+		Doesn't actually specify "arm" or "left leg" or anything.
+		Entitydata has bonesprites for non-variable entities (e.g. boars, not players).
+		Player code should set animator.bonesprites appropriately when swapping gear.
+		'''
+
 		# draw counter
 		self.currframe = 0
+
+	def add_bonesprite(self, bsname):
+		bonespriteindex = self.bonesprites.append(sb.add(bsname), )
+		self.bonesprites.append(bonespriteindex)
 
 	def draw(self, sb, camera, facingdir):
 		animation = self.curranimation
@@ -341,12 +360,13 @@ class SkellyAnimator:
 		epos = (self.entity.x, self.entity.y)
 
 		for bi in range(animation.numbones):
-			si = animation.bonesprites[bi]
-			pos = animation.bonepos[indexstart + bi]
-			rot = animation.bonerot[indexstart + bi]
-			pos = v2_add(pos, epos)
-			isrot = (pos, rot, self.scale)
-			result.append(sb.draw_isrot(si, isrot, fliphorz=fliphorz))
+			si = self.bonesprites[bi]
+			if (not si is None):
+				pos = animation.bonepos[indexstart + bi]
+				rot = animation.bonerot[indexstart + bi]
+				pos = v2_add(pos, epos)
+				isrot = (pos, rot, self.scale)
+				result.append(sb.draw_isrot(si, isrot, fliphorz=fliphorz))
 
 		# increase frame counter, set next animation if needed
 		self.currframe += 1
@@ -354,7 +374,7 @@ class SkellyAnimator:
 			self.currframe = 0
 			if (not animation.repeat):
 				if (self.numnext > 0):
-					nextanimname = self.nextanimations.pop(0)
+					nextanimname = self.nextanimationnames.pop(0)
 					self.curranimation = self.get_animation(nextanimname)
 					self.numnext -= 1
 				elif (animation.name != self.defaultanimationname):
@@ -363,7 +383,7 @@ class SkellyAnimator:
 		return result
 
 	def clear_queue(self):
-		self.nextanimations.clear()
+		self.nextanimationnames.clear()
 		self.numnext = 0
 
 	def get_animation(self, animname):
@@ -382,7 +402,7 @@ class SkellyAnimator:
 		self.curranimation = animation
 
 	def queue_next(self, animname):
-		self.nextanimations.append(animname)
+		self.nextanimationnames.append(animname)
 		self.numnext += 1
 
 	def set_defaultanimation(self, animname):
@@ -472,32 +492,10 @@ class InputDataBuffer:
 class SpriteSheet:
 	def __init__(self, data, name):
 		self.name = name
-
-		self.image = None
-		self.tileswide = 0
-		self.tilestall = 0
-		self.frameswide = 0
-		self.framestall = 0
-
-		self.loadsprite(data, name)
+		self.image = pygame.image.load(data[name]['file'])
 
 		# use this var to determine when to unload
 		self.numloadedmapsusing = 1
-
-	def loadsprite(self, data, name):
-		# parse the spritedata.json file in ./data
-		datatype = data['datatype']
-
-		if (datatype == 'scene'):
-			self.image = pygame.image.load(data[name]['file'])
-			self.frameswide = int(data[name]['frameswide'])
-			self.framestall = int(data[name]['framestall'])
-		elif (datatype == 'actor'):
-			self.image = pygame.image.load(data[name]['file'])
-			self.tileswide = int(data[name]['tileswide'])
-			self.tilestall = int(data[name]['tilestall'])
-			self.frameswide = int(data[name]['frameswide'])
-			self.framestall = int(data[name]['framestall'])
 
 	def get_image(self):
 		result = self.image

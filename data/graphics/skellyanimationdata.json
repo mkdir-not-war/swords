@@ -6,6 +6,31 @@
 		"tileheight" : 1,
 		"numbones" : 0,
 		"numframes" : 1,
-		"repeat" : 1
+		"repeat" : 1,
+		"bonesprites" : null
 	},
+	"boar-idle" : {
+		"imageheightpx" : 1,
+		"tileheight" : 1,
+		"numbones" : 0,
+		"numframes" : 1,
+		"repeat" : 1,
+		"bonesprites" : null
+	},
+	"boar-fall" : {
+		"imageheightpx" : 1,
+		"tileheight" : 1,
+		"numbones" : 0,
+		"numframes" : 1,
+		"repeat" : 1,
+		"bonesprites" : null
+	},
+	"boar-prone" : {
+		"imageheightpx" : 1,
+		"tileheight" : 1,
+		"numbones" : 0,
+		"numframes" : 1,
+		"repeat" : 1,
+		"bonesprites" : null
+	}
 }
