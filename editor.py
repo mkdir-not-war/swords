@@ -430,20 +430,8 @@ class MapData:
 				index = spritebatch.add(name)
 				spriteindextranslator.append(index)
 				self.spriteindexset.append((name, index))
-
+				
 			elif (loadphase == 3):
-				# load middleground, each char is 2x2 tiles
-				sline = line.strip('\n').split(',')
-				colnum = 0
-
-				for char in sline:
-					if (char != '0'):
-						# set sprite index
-						spriteindex = spriteindextranslator[int(char)]
-						self.spriteindex_mg[linenum*2 * self.width + colnum] = spriteindex
-					colnum += 2
-
-			elif (loadphase == 4):
 				# load geometry, each char is 2x2 tiles
 				sline = line.strip('\n').split(',')
 				colnum = 0
@@ -455,21 +443,32 @@ class MapData:
 						spriteindex = spriteindextranslator[int(char)]
 						self.spriteindex_geo[linenum*2 * self.width + colnum] = spriteindex
 						# set geometry
-						self.geo.append(True)
-						self.geo.append(True)
-						botline.append(True)
-						botline.append(True)
+						self.geo[linenum * 2 * self.width + colnum] = True
+						self.geo[linenum * 2 * self.width + colnum + 1] = True
+						self.geo[(linenum * 2 + 1) * self.width + colnum] = True
+						self.geo[(linenum * 2 + 1) * self.width + colnum + 1] = True
 					else:
-						self.geo.append(False)
-						self.geo.append(False)
-						botline.append(False)
-						botline.append(False)
+						self.geo[linenum * 2 * self.width + colnum] = False
+						self.geo[linenum * 2 * self.width + colnum + 1] = False
+						self.geo[(linenum * 2 + 1) * self.width + colnum] = False
+						self.geo[(linenum * 2 + 1) * self.width + colnum + 1] = False
 
 					colnum += 2
 
-				for char in botline:
-					self.geo.append(char)
+			elif (loadphase == 4):
+				# load middleground, each char is 2x2 tiles
+				sline = line.strip('\n').split(',')
+				colnum = 0
 
+				for char in sline:
+					if (char != '0'):
+						# set sprite index
+						spriteindex = spriteindextranslator[int(char)]
+						gridindex = linenum*2 * self.width + colnum
+						# don't draw midground behind geometry (can't see it anyway)
+						if (not self.geo[gridindex]):
+							self.spriteindex_mg[gridindex] = spriteindex
+					colnum += 2
 			
 			linenum += 1
 				
@@ -718,26 +717,10 @@ class HUD_Element:
 class SpriteSheet:
 	def __init__(self, data, name):
 		self.name = name
-
-		self.image = None
-		self.tileswide = 0
-		self.tilestall = 0
-		self.frameswide = 0
-		self.framestall = 0
-
-		self.loadsprite(data, name)
+		self.image = pygame.image.load(data[name]['file'])
 
 		# use this var to determine when to unload
 		self.numloadedmapsusing = 1
-
-	def loadsprite(self, data, name):
-		# parse the spritedata.json file in ./data
-		datatype = data['datatype']
-
-		if (datatype == 'scene'):
-			self.image = pygame.image.load(data[name]['file'])
-			self.frameswide = data[name]['frameswide']
-			self.framestall = data[name]['framestall']
 
 	def get_image(self):
 		result = self.image
@@ -753,7 +736,7 @@ class SpriteBatch:
 		self.length = 0
 		self.sprites = []
 
-		fin = open('./data/scenespritedata.json')
+		fin = open('./data/graphics/spritedata.json')
 		self.scenespritedata = json.load(fin)
 		fin.close()
 
