@@ -1241,7 +1241,7 @@ def main():
 
 	# geometry never changes, so no need to be in worldstate
 	geometry = MapData()
-	geometry.load("widemap", spritebatch)
+	geometry.load("widemap1", spritebatch)
 
 	# add player
 	player = entityloader.create_entity("player-local", position=geometry.get_spawn())

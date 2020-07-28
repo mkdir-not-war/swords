@@ -465,9 +465,11 @@ class MapData:
 						# set sprite index
 						spriteindex = spriteindextranslator[int(char)]
 						gridindex = linenum*2 * self.width + colnum
-						# don't draw midground behind geometry (can't see it anyway)
-						if (not self.geo[gridindex]):
-							self.spriteindex_mg[gridindex] = spriteindex
+						'''
+						usually check for occluding foreground here,
+						but we load both in the editor regardless.
+						'''
+						self.spriteindex_mg[gridindex] = spriteindex
 					colnum += 2
 			
 			linenum += 1
@@ -496,11 +498,11 @@ class MapData:
 			fileoutput.append('%d,%s\n' % (index+1, name))
 		fileoutput.append('~\n')
 
-		# middleground sprite indexs
+		# geometry sprite indexs
 		for j in range(self.height//2):
 			line = []
 			for i in range(self.width//2):
-				si = self.spriteindex_mg[j*2 * self.width + i*2]
+				si = self.spriteindex_geo[j*2 * self.width + i*2]
 				if (si >= 0):
 					name = spritebatch.sprites[si].name
 					mapindex = None
@@ -514,11 +516,11 @@ class MapData:
 			fileoutput.append(''.join(line).strip(',') + '\n')
 		fileoutput.append('~\n')
 
-		# geometry sprite indexs
+		# middleground sprite indexs
 		for j in range(self.height//2):
 			line = []
 			for i in range(self.width//2):
-				si = self.spriteindex_geo[j*2 * self.width + i*2]
+				si = self.spriteindex_mg[j*2 * self.width + i*2]
 				if (si >= 0):
 					name = spritebatch.sprites[si].name
 					mapindex = None
