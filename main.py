@@ -672,6 +672,11 @@ def update_physicsbodies(entities, numentities, geometry):
 NOTE: implementation of collision assumes all physics bodies have
 height and width as integer multiples of TILE_WIDTH
 """
+
+'''
+TODO: replace/condense get and set functions for collisions by using Enums 
+as named indexes in the collisions array.
+'''
 class PhysicsBody:
 	def __init__(self, widthintiles=1, heightintiles=1, mass=1.0):
 		self.entity = None
@@ -783,6 +788,19 @@ class EntityLoader:
 
 		entity = Entity(position=position, spriteindex=spriteindex, physics=physics, player=player)
 		return entity
+
+'''
+TODO: shift all state info (i.e. vars) from components into entity class. Each 
+component only has functions, no state info. All functions take entity as var.
+
+No longer need "entity" var everywhere with weird code to defer-set it.
+Also can have flyweight objects for functionality instead of having copies of components
+all over the place (probably really slow).
+
+Finally, make a memory arena of all entities, with IDs. Instead of destroying entities,
+e.g. when the creature is killed, just set the ID to None to turn it off. Don't evaluate 
+component logic on entities without IDs.
+'''
 
 class Entity:
 	def __init__(self, position=(0, 0), physics=None, spriteindex=None, animator=None, player=None):
